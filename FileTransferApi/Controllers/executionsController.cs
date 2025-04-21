@@ -2,6 +2,7 @@
 using Data.Dtos.FileTransfer;
 using Data.Models;
 using Mapster;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,6 +23,7 @@ namespace FileTransferApi.Controllers
             _logger = logger;
         }
 
+        [Authorize]
         [HttpGet("tasks/{taskId}")]
         public async Task<ActionResult<IEnumerable<TransferExecutionResponse>>> GetTaskExecutions(int taskId)
         {
@@ -41,6 +43,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("{id}")]
         public async Task<ActionResult<TransferExecutionResponse>> GetExecutionById(int id)
         {
@@ -59,6 +62,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("{id}/files")]
         public async Task<ActionResult<IEnumerable<TransferredFileResponse>>> GetExecutionFiles(int id)
         {
@@ -78,6 +82,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("{id}/cancel")]
         public async Task<ActionResult> CancelExecution(int id)
         {

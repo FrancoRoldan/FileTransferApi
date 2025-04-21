@@ -2,6 +2,7 @@
 using Data.Dtos.FileTransfer;
 using Data.Models;
 using Mapster;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,6 +23,7 @@ namespace FileTransferApi.Controllers
             _logger = logger;
         }
 
+        [Authorize]
         [HttpGet("")]
         public async Task<ActionResult<IEnumerable<ServerCredential>>> GetAllCredentials()
         {
@@ -37,6 +39,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("{id}")]
         public async Task<ActionResult<ServerCredential>> GetCredentialById(int id)
         {
@@ -55,6 +58,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("")]
         public async Task<ActionResult<ServerCredential>> CreateCredential([FromBody] ServerCredentialRequest credential)
         {
@@ -70,6 +74,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPut("{id}")]
         public async Task<ActionResult<ServerCredential>> UpdateCredential(int id, [FromBody] ServerCredential credential)
         {
@@ -92,6 +97,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpDelete("{id}")]
         public async Task<ActionResult> DeleteCredential(int id)
         {
@@ -110,6 +116,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("{id}/test")]
         public async Task<ActionResult<bool>> TestConnection(int id)
         {

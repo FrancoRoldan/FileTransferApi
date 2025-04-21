@@ -2,6 +2,7 @@
 using Data.Dtos.FileTransfer;
 using Data.Models;
 using Mapster;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -22,8 +23,7 @@ namespace FileTransferApi.Controllers
             _logger = logger;
         }
 
-        // Tasks endpoints
-
+        [Authorize]
         [HttpGet("")]
         public async Task<ActionResult<IEnumerable<FileTransferTaskResponse>>> GetAllTasks()
         {
@@ -39,6 +39,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("active")]
         public async Task<ActionResult<IEnumerable<FileTransferTaskResponse>>> GetActiveTasks()
         {
@@ -54,6 +55,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpGet("{id}")]
         public async Task<ActionResult<FileTransferTaskResponse>> GetTaskById(int id)
         {
@@ -72,6 +74,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("")]
         public async Task<ActionResult<FileTransferTaskResponse>> CreateTask([FromBody] FileTransferTaskRequest task)
         {
@@ -87,6 +90,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPut("{id}")]
         public async Task<ActionResult<FileTransferTask>> UpdateTask(int id, [FromBody] FileTransferTaskRequest task)
         {
@@ -109,6 +113,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpDelete("{id}")]
         public async Task<ActionResult> DeleteTask(int id)
         {
@@ -127,6 +132,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("{id}/execute")]
         public async Task<ActionResult<TransferExecutionResponse>> ExecuteTask(int id)
         {
@@ -146,6 +152,7 @@ namespace FileTransferApi.Controllers
             }
         }
 
+        [Authorize]
         [HttpPost("{id}/test")]
         public async Task<ActionResult<bool>> TestTaskConnections(int id)
         {
