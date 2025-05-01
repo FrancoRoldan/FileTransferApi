@@ -35,7 +35,7 @@ namespace Core.Services.Transfer
         Task<IEnumerable<ServerCredential>> GetAllCredentialsAsync();
 
         // Testing connections
-        Task<bool> TestConnectionAsync(ServerCredential credential);
+        Task<bool> TestConnectionAsync(ServerCredential credential, string? folder = "");
         Task<bool> TestTaskConnectionsAsync(FileTransferTask task);
     }
 }

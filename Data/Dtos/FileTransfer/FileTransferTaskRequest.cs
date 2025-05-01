@@ -20,9 +20,8 @@ namespace Data.Dtos.FileTransfer
         public string DestinationFolder { get; set; } = "";
         public string? FilePattern { get; set; } 
         public bool CreateSubfolders { get; set; } = false;
-        public bool DeleteSourceAfterTransfer { get; set; } = false;
-        public bool CopySubfolders { get; set; }
-        public bool DeleteSourceFolderAfterTransfer { get; set; }
+        public bool CopySubfolders { get; set; } = false;
+        public bool DeleteSourceFolderAfterTransfer { get; set; } = false;
 
         // Configuración de programación
         public TransferScheduleType ScheduleType { get; set; } = TransferScheduleType.OneTime;

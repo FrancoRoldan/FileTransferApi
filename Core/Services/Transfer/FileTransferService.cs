@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Renci.SshNet;
 using System.Text.RegularExpressions;
 using FluentFTP;
+using Core.Utils;
 
 namespace Core.Services.Transfer
 {
@@ -86,7 +87,6 @@ namespace Core.Services.Transfer
 
         public async Task<TransferExecution> ExecuteTaskAsync(FileTransferTask task)
         {
-            // Create execution record
             var execution = new TransferExecution
             {
                 FileTransferTaskId = task.Id,
@@ -104,7 +104,6 @@ namespace Core.Services.Transfer
                 if (sourceCredential == null || destinationCredential == null)
                     throw new ArgumentException("Source or destination credential not found");
 
-                // Get source files
                 var sourceFiles = await GetFilesFromServerAsync(
                     sourceCredential,
                     task.SourceFolder,
@@ -113,7 +112,6 @@ namespace Core.Services.Transfer
 
                 HashSet<string> processedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-                // Transfer each file
                 foreach (var sourceFile in sourceFiles)
                 {
                     var result = await TransferFileAsync(
@@ -124,7 +122,7 @@ namespace Core.Services.Transfer
                         task.SourceFolder,
                         task.DestinationFolder,
                         task.CreateSubfolders,
-                        task.DeleteSourceAfterTransfer);
+                        task.DeleteSourceFolderAfterTransfer);
 
                     if (result.TransferSuccessful && task.DeleteSourceFolderAfterTransfer)
                     {
@@ -138,10 +136,17 @@ namespace Core.Services.Transfer
 
                 if (task.DeleteSourceFolderAfterTransfer)
                 {
-                    await DeleteFoldersRecursivelyAsync(sourceCredential, task.SourceFolder, processedFolders);
+                    if (sourceCredential.ServerType.ToUpper() == "NETWORK")
+                    {
+                        string networkPath = "\\\\" + sourceCredential.Host + (task.SourceFolder.StartsWith("/") ? task.SourceFolder : "/" + task.SourceFolder);
+                        await DeleteNetworkFoldersRecursivelyAsync(networkPath, processedFolders);
+                    }
+                    else
+                    {
+                        await DeleteFoldersRecursivelyAsync(sourceCredential, task.SourceFolder, processedFolders);
+                    }
                 }
 
-                // Update execution record
                 execution.EndTime = DateTime.UtcNow;
                 execution.Status = "Completed";
                 await _executionRepository.UpdateAsync(execution);
@@ -152,7 +157,6 @@ namespace Core.Services.Transfer
             {
                 _logger.LogError(ex, $"Error executing task {task.Id}: {ex.Message}");
 
-                // Update execution record with error
                 execution.EndTime = DateTime.UtcNow;
                 execution.Status = "Error";
                 execution.ErrorMessage = ex.Message;
@@ -183,12 +187,11 @@ namespace Core.Services.Transfer
             baseFolder = baseFolder.Replace('\\', '/').TrimEnd('/');
 
             var allFolders = processedFolders
-                .OrderByDescending(f => f.Count(c => c == '/'))  
+                .OrderByDescending(f => f.Count(c => c == '/'))
                 .ToList();
 
             foreach (var folder in allFolders)
             {
-                // Skip the base folder
                 if (folder.Equals(baseFolder, StringComparison.OrdinalIgnoreCase))
                     continue;
 
@@ -213,9 +216,8 @@ namespace Core.Services.Transfer
                     {
                         await Task.Run(() => client.Connect());
 
-                        // Check if the folder exists and is empty
                         var listing = client.GetListing(remotePath);
-                        if (listing.Length == 0) // If empty, delete it
+                        if (listing.Length == 0) 
                         {
                             client.DeleteDirectory(remotePath);
                         }
@@ -231,12 +233,10 @@ namespace Core.Services.Transfer
                     {
                         await Task.Run(() => client.Connect());
 
-                        // Check if the folder exists and is empty
                         var listing = client.ListDirectory(remotePath).ToList();
-                        // SFTP always returns . and .. entries
                         var nonSpecialEntries = listing.Where(e => e.Name != "." && e.Name != "..").ToList();
 
-                        if (nonSpecialEntries.Count == 0) // If empty, delete it
+                        if (nonSpecialEntries.Count == 0) 
                         {
                             client.DeleteDirectory(remotePath);
                         }
@@ -248,7 +248,7 @@ namespace Core.Services.Transfer
                     break;
 
                 default:
-                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported");
+                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported for DeleteFolderAsync");
             }
         }
 
@@ -279,7 +279,6 @@ namespace Core.Services.Transfer
 
         public async Task<ServerCredential> CreateCredentialAsync(ServerCredential credential)
         {
-            // Encrypt password before saving
             if (!string.IsNullOrEmpty(credential.EncryptedPassword))
             {
                 credential.EncryptedPassword = _encryptionService.Encrypt(credential.EncryptedPassword);
@@ -292,7 +291,6 @@ namespace Core.Services.Transfer
         {
             var existingCredential = await _credentialRepository.GetByIdAsync(credential.Id);
 
-            // Only encrypt if password has changed
             if (!string.IsNullOrEmpty(credential.EncryptedPassword) &&
                 credential.EncryptedPassword != existingCredential.EncryptedPassword)
             {
@@ -326,7 +324,7 @@ namespace Core.Services.Transfer
 
         #region Testing Connections
 
-        public async Task<bool> TestConnectionAsync(ServerCredential credential)
+        public async Task<bool> TestConnectionAsync(ServerCredential credential,string? folder = "")
         {
             try
             {
@@ -344,6 +342,22 @@ namespace Core.Services.Transfer
                         {
                             await Task.Run(() => client.Connect());
                             return client.IsConnected;
+                        }
+
+                    case "NETWORK":
+                        string networkPath = BuildNetworkPath(credential, folder??"");
+
+                        if (!string.IsNullOrEmpty(credential.Username))
+                        {
+                            using (var networkConnection = new NetworkConnection(networkPath, credential.Username,
+                                _encryptionService.Decrypt(credential.EncryptedPassword)))
+                            {
+                                return Directory.Exists(networkPath);
+                            }
+                        }
+                        else
+                        {
+                            return Directory.Exists(networkPath);
                         }
 
                     default:
@@ -364,16 +378,26 @@ namespace Core.Services.Transfer
 
             if (sourceCredential == null || destinationCredential == null)
                 return false;
+            var sourceResult = false;
+            var destinationResult = false;
 
-            var sourceResult = await TestConnectionAsync(sourceCredential);
-            var destinationResult = await TestConnectionAsync(destinationCredential);
+            if (sourceCredential.ServerType == "NETWORK" && destinationCredential.ServerType == "NETWORK")
+            {
+                sourceResult = await TestConnectionAsync(sourceCredential, task.SourceFolder);
+                destinationResult = await TestConnectionAsync(destinationCredential, task.DestinationFolder);
+
+                return sourceResult && destinationResult;
+            }
+
+            sourceResult = await TestConnectionAsync(sourceCredential);
+            destinationResult = await TestConnectionAsync(destinationCredential);
 
             return sourceResult && destinationResult;
         }
 
         #endregion
 
-        #region Private Helper Methods
+        #region File Operations
 
         private async Task<IEnumerable<string>> GetFilesFromServerAsync(
             ServerCredential credential,
@@ -401,6 +425,11 @@ namespace Core.Services.Transfer
                     }
                     break;
 
+                case "NETWORK":
+                    var networkFiles = await GetNetworkFilesAsync(credential, folder, filePattern, includeSubfolders);
+                    files.AddRange(networkFiles);
+                    break;
+
                 default:
                     throw new NotSupportedException($"Server type {credential.ServerType} is not supported");
             }
@@ -417,7 +446,6 @@ namespace Core.Services.Transfer
         {
             var listing = client.GetListing(folder);
 
-            // Add files in current directory
             foreach (var item in listing.Where(i => i.Type == FluentFTP.FtpObjectType.File))
             {
                 if (string.IsNullOrEmpty(filePattern) || Regex.IsMatch(item.Name, filePattern))
@@ -426,7 +454,6 @@ namespace Core.Services.Transfer
                 }
             }
 
-            // Process subdirectories if requested
             if (includeSubfolders)
             {
                 foreach (var item in listing.Where(i => i.Type == FluentFTP.FtpObjectType.Directory))
@@ -446,7 +473,6 @@ namespace Core.Services.Transfer
         {
             var listing = client.ListDirectory(folder);
 
-            // Add files in current directory
             foreach (var item in listing.Where(i => i.IsRegularFile))
             {
                 if (string.IsNullOrEmpty(filePattern) || Regex.IsMatch(item.Name, filePattern))
@@ -455,7 +481,6 @@ namespace Core.Services.Transfer
                 }
             }
 
-            // Process subdirectories if requested
             if (includeSubfolders)
             {
                 foreach (var item in listing.Where(i => i.IsDirectory && !i.Name.Equals(".") && !i.Name.Equals("..")))
@@ -479,10 +504,8 @@ namespace Core.Services.Transfer
             string fileName = Path.GetFileName(sourceFilePath);
             string destinationFilePath;
 
-            // Calculate destination path
-            if (createSubfolders && sourceFilePath.StartsWith(sourceBaseFolder))
+            if (createSubfolders && sourceFilePath.StartsWith(sourceBaseFolder, StringComparison.OrdinalIgnoreCase))
             {
-                // Preserve folder structure
                 string relativePath = sourceFilePath.Substring(sourceBaseFolder.Length).TrimStart('/');
                 destinationFilePath = Path.Combine(destinationBaseFolder, relativePath).Replace('\\', '/');
             }
@@ -491,39 +514,45 @@ namespace Core.Services.Transfer
                 destinationFilePath = Path.Combine(destinationBaseFolder, fileName).Replace('\\', '/');
             }
 
-            // Create record for transferred file
             var transferredFile = new TransferredFile
             {
                 TransferExecutionId = executionId,
                 FileName = fileName,
                 SourcePath = sourceFilePath,
                 DestinationPath = destinationFilePath,
-                FileSize = 0, // Will be updated during transfer
+                FileSize = 0, 
                 TransferSuccessful = false
             };
 
             try
             {
-                // Create temp file to store content during transfer
+                if (source.ServerType.ToUpper() == "NETWORK" && destination.ServerType.ToUpper() == "NETWORK")
+                {
+                    return await TransferNetworkFileAsync(
+                        executionId,
+                        source,
+                        destination,
+                        sourceFilePath,
+                        sourceBaseFolder,
+                        destinationBaseFolder,
+                        createSubfolders,
+                        deleteSource);
+                }
+
                 string tempFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
                 try
                 {
-                    // Download from source
                     await DownloadFileAsync(source, sourceFilePath, tempFile);
 
-                    // Get file size
+                    string destinationDir = Path.GetDirectoryName(destinationFilePath)!;
+                    await EnsureDirectoryExistsAsync(destination, destinationDir);
+
+                    await UploadFileAsync(destination, tempFile, destinationFilePath);
+
                     var fileInfo = new FileInfo(tempFile);
                     transferredFile.FileSize = fileInfo.Length;
 
-                    // Create destination directory if needed
-                    string destinationDir = Path.GetDirectoryName(destinationFilePath);
-                    await EnsureDirectoryExistsAsync(destination, destinationDir);
-
-                    // Upload to destination
-                    await UploadFileAsync(destination, tempFile, destinationFilePath);
-
-                    // Delete source if requested
                     if (deleteSource)
                     {
                         await DeleteFileAsync(source, sourceFilePath);
@@ -533,7 +562,6 @@ namespace Core.Services.Transfer
                 }
                 finally
                 {
-                    // Clean up temp file
                     if (File.Exists(tempFile))
                     {
                         File.Delete(tempFile);
@@ -546,7 +574,6 @@ namespace Core.Services.Transfer
                 transferredFile.ErrorMessage = ex.Message;
             }
 
-            // Save and return transfer record
             return await _transferredFileRepository.AddAsync(transferredFile);
         }
 
@@ -573,8 +600,26 @@ namespace Core.Services.Transfer
                     }
                     break;
 
+                case "NETWORK":
+                    string networkPath = remotePath.Replace('/', '\\');
+
+                    if (!string.IsNullOrEmpty(credential.Username))
+                    {
+                        string basePath = credential.Host.StartsWith("\\\\") ? credential.Host : $"\\\\{credential.Host}";
+                        using (var networkConnection = new NetworkConnection(
+                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword)))
+                        {
+                            File.Copy(networkPath, localPath, true);
+                        }
+                    }
+                    else
+                    {
+                        File.Copy(networkPath, localPath, true);
+                    }
+                    break;
+
                 default:
-                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported");
+                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported for download");
             }
         }
 
@@ -601,8 +646,32 @@ namespace Core.Services.Transfer
                     }
                     break;
 
+                case "NETWORK":
+                    string networkPath = remotePath.Replace('/', '\\');
+
+                    string directory = Path.GetDirectoryName(networkPath);
+                    if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+
+                    if (!string.IsNullOrEmpty(credential.Username))
+                    {
+                        string basePath = credential.Host.StartsWith("\\\\") ? credential.Host : $"\\\\{credential.Host}";
+                        using (var networkConnection = new NetworkConnection(
+                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword)))
+                        {
+                            File.Copy(localPath, networkPath, true);
+                        }
+                    }
+                    else
+                    {
+                        File.Copy(localPath, networkPath, true);
+                    }
+                    break;
+
                 default:
-                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported");
+                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported for upload");
             }
         }
 
@@ -626,8 +695,32 @@ namespace Core.Services.Transfer
                     }
                     break;
 
+                case "NETWORK":
+                    string networkPath = remotePath.Replace('/', '\\');
+
+                    if (!string.IsNullOrEmpty(credential.Username))
+                    {
+                        string basePath = credential.Host.StartsWith("\\\\") ? credential.Host : $"\\\\{credential.Host}";
+                        using (var networkConnection = new NetworkConnection(
+                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword)))
+                        {
+                            if (File.Exists(networkPath))
+                            {
+                                File.Delete(networkPath);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (File.Exists(networkPath))
+                        {
+                            File.Delete(networkPath);
+                        }
+                    }
+                    break;
+
                 default:
-                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported");
+                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported for file deletion");
             }
         }
 
@@ -651,7 +744,6 @@ namespace Core.Services.Transfer
                     {
                         await Task.Run(() => client.Connect());
 
-                        // Split path into segments and create each directory level
                         string[] segments = remotePath.Split('/');
                         string currentPath = "";
 
@@ -672,16 +764,43 @@ namespace Core.Services.Transfer
                             catch (Exception ex)
                             {
                                 _logger.LogWarning(ex, $"Error creating directory {currentPath}: {ex.Message}");
-                                // Continue anyway - might be created by another process
                             }
                         }
                     }
                     break;
 
+                case "NETWORK":
+                    string networkPath = remotePath.Replace('/', '\\');
+
+                    if (!string.IsNullOrEmpty(credential.Username))
+                    {
+                        string basePath = credential.Host.StartsWith("\\\\") ? credential.Host : $"\\\\{credential.Host}";
+                        using (var networkConnection = new NetworkConnection(
+                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword)))
+                        {
+                            if (!Directory.Exists(networkPath))
+                            {
+                                Directory.CreateDirectory(networkPath);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (!Directory.Exists(networkPath))
+                        {
+                            Directory.CreateDirectory(networkPath);
+                        }
+                    }
+                    break;
+
                 default:
-                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported");
+                    throw new NotSupportedException($"Server type {credential.ServerType} is not supported for directory creation");
             }
         }
+
+        #endregion
+
+        #region Client Creation
 
         private FtpClient CreateFtpClient(ServerCredential credential)
         {
@@ -698,7 +817,6 @@ namespace Core.Services.Transfer
         {
             if (!string.IsNullOrEmpty(credential.PrivateKeyPath))
             {
-                // Use private key authentication
                 var keyFile = new PrivateKeyFile(credential.PrivateKeyPath);
                 return new SftpClient(
                     credential.Host,
@@ -708,7 +826,6 @@ namespace Core.Services.Transfer
             }
             else
             {
-                // Use password authentication
                 string password = _encryptionService.Decrypt(credential.EncryptedPassword);
                 return new SftpClient(
                     credential.Host,
@@ -718,6 +835,233 @@ namespace Core.Services.Transfer
             }
         }
 
+        #endregion
+
+        #region Network Share Operations
+
+        private string BuildNetworkPath(ServerCredential credential, string folder)
+        {
+            if (credential.Host.StartsWith("\\\\"))
+            {
+                return Path.Combine(credential.Host, folder).Replace('/', '\\');
+            }
+            return $"\\\\{credential.Host}\\{folder.TrimStart('/', '\\')}";
+        }
+
+        private async Task<IEnumerable<string>> GetNetworkFilesAsync(
+            ServerCredential credential,
+            string folder,
+            string? filePattern,
+            bool includeSubfolders = false)
+        {
+            List<string> files = new List<string>();
+
+            try
+            {
+                string networkPath = BuildNetworkPath(credential, folder);
+
+                if (!string.IsNullOrEmpty(credential.Username))
+                {
+                    using (var networkConnection = new NetworkConnection(networkPath, credential.Username,
+                        _encryptionService.Decrypt(credential.EncryptedPassword)))
+                    {
+                        files = await ScanNetworkFolderAsync(networkPath, filePattern, includeSubfolders);
+                    }
+                }
+                else
+                {
+                    files = await ScanNetworkFolderAsync(networkPath, filePattern, includeSubfolders);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error listing files in network folder {folder} for server {credential.Host}: {ex.Message}");
+                throw;
+            }
+
+            return files;
+        }
+
+        private async Task<List<string>> ScanNetworkFolderAsync(
+            string networkPath,
+            string? filePattern,
+            bool includeSubfolders)
+        {
+            List<string> files = new List<string>();
+
+            try
+            {
+                foreach (var file in Directory.GetFiles(networkPath))
+                {
+                    string fileName = Path.GetFileName(file);
+                    if (string.IsNullOrEmpty(filePattern) || Regex.IsMatch(fileName, filePattern))
+                    {
+                        files.Add(file.Replace('\\', '/'));
+                    }
+                }
+
+                if (includeSubfolders)
+                {
+                    foreach (var subDir in Directory.GetDirectories(networkPath))
+                    {
+                        var subDirFiles = await ScanNetworkFolderAsync(subDir, filePattern, true);
+                        files.AddRange(subDirFiles);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error scanning network folder {networkPath}: {ex.Message}");
+                throw;
+            }
+
+            return files;
+        }
+
+        private async Task<TransferredFile> TransferNetworkFileAsync(
+            int executionId,
+            ServerCredential source,
+            ServerCredential destination,
+            string sourceFilePath,
+            string sourceFolderPath,
+            string destinationFolderPath,
+            bool createSubfolders,
+            bool deleteSource)
+        {
+            string fileName = Path.GetFileName(sourceFilePath);
+            string destinationFilePath;
+
+            string sourceNetworkPath = sourceFilePath.Replace('/', '\\');
+            string destBasePath = BuildNetworkPath(destination, destinationFolderPath);
+
+            sourceFilePath = sourceFilePath.Substring(source.Host.Length + 2);
+
+            if (createSubfolders && sourceFilePath.StartsWith(sourceFolderPath, StringComparison.OrdinalIgnoreCase))
+            {
+                string relativePath = sourceFilePath.Substring(sourceFolderPath.Length).TrimStart('\\', '/');
+                string relativeDirectory = Path.GetDirectoryName(relativePath)!;
+
+                if (!string.IsNullOrEmpty(relativeDirectory))
+                {
+                    destinationFilePath = Path.Combine(destBasePath, relativeDirectory, fileName).Replace('/', '\\');
+                }
+                else
+                {
+                    destinationFilePath = Path.Combine(destBasePath, fileName).Replace('/', '\\');
+                }
+            }
+            else
+            {
+                destinationFilePath = Path.Combine(destBasePath, fileName).Replace('/', '\\');
+            }
+
+            var transferredFile = new TransferredFile
+            {
+                TransferExecutionId = executionId,
+                FileName = fileName,
+                SourcePath = sourceFilePath,
+                DestinationPath = destinationFilePath,
+                FileSize = 0,
+                TransferSuccessful = false
+            };
+
+            try
+            {
+                NetworkConnection sourceConnection = null;
+                NetworkConnection destConnection = null;
+
+                try
+                {
+                    if (!string.IsNullOrEmpty(source.Username))
+                    {
+                        string sourcePath = source.Host.StartsWith("\\\\") ? source.Host : $"\\\\{source.Host}";
+                        sourceConnection = new NetworkConnection(sourcePath, source.Username, _encryptionService.Decrypt(source.EncryptedPassword));
+                    }
+
+                    if (!string.IsNullOrEmpty(destination.Username))
+                    {
+                        string destPath = destination.Host.StartsWith("\\\\") ? destination.Host : $"\\\\{destination.Host}";
+                        destConnection = new NetworkConnection(destPath, destination.Username, _encryptionService.Decrypt(destination.EncryptedPassword));
+                    }
+
+                    string destinationDir = Path.GetDirectoryName(destinationFilePath)!;
+                    if (!string.IsNullOrEmpty(destinationDir) && !Directory.Exists(destinationDir))
+                    {
+                        Directory.CreateDirectory(destinationDir);
+                    }
+
+                    var fileInfo = new FileInfo(sourceNetworkPath);
+                    transferredFile.FileSize = fileInfo.Length;
+
+                    await Task.Run(() => File.Copy(sourceNetworkPath, destinationFilePath, true));
+
+                    if (deleteSource)
+                    {
+                        await Task.Run(() => File.Delete(sourceNetworkPath));
+                    }
+
+                    transferredFile.TransferSuccessful = true;
+                }
+                finally
+                {
+                    sourceConnection?.Dispose();
+                    destConnection?.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error transferring network file {sourceFilePath}: {ex.Message}");
+                transferredFile.ErrorMessage = ex.Message;
+            }
+
+            return await _transferredFileRepository.AddAsync(transferredFile);
+        }
+
+
+
+        private async Task DeleteNetworkFolderAsync(string folderPath)
+        {
+            try
+            {
+                string normalizedPath = folderPath.Replace('/', '\\');
+                if (Directory.Exists(normalizedPath) &&
+                    !Directory.GetFiles(normalizedPath).Any() &&
+                    !Directory.GetDirectories(normalizedPath).Any())
+                {
+                    await Task.Run(() => Directory.Delete(normalizedPath));
+                    _logger.LogInformation($"Deleted empty folder: {folderPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, $"Failed to delete folder {folderPath}: {ex.Message}");
+            }
+        }
+
+        private async Task DeleteNetworkFoldersRecursivelyAsync(string baseFolder, HashSet<string> processedFolders)
+        {
+            baseFolder = baseFolder.Replace('\\', '/').TrimEnd('/');
+
+            var allFolders = processedFolders
+                .OrderByDescending(f => f.Count(c => c == '/'))
+                .ToList();
+
+            foreach (var folder in allFolders)
+            {
+                if (folder.Equals(baseFolder, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                try
+                {
+                    _logger.LogInformation($"Deleting folder: {folder}");
+                    await DeleteNetworkFolderAsync(folder);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, $"Could not delete folder {folder}: {ex.Message}");
+                }
+            }
+        }
         #endregion
     }
 }

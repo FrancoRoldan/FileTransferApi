@@ -28,7 +28,6 @@ namespace Data.Models
         public string DestinationFolder { get; set; } = "";
         public string? FilePattern { get; set; } // Expresión regular para filtrar archivos
         public bool CreateSubfolders { get; set; } = false;
-        public bool DeleteSourceAfterTransfer { get; set; } = false;
         public bool CopySubfolders { get; set; } = false;
         public bool DeleteSourceFolderAfterTransfer { get; set; } = false;
 
