@@ -118,7 +118,7 @@ namespace FileTransferApi.Controllers
 
         [Authorize]
         [HttpPost("{id}/test")]
-        public async Task<ActionResult<bool>> TestConnection(int id)
+        public async Task<ActionResult<bool>> TestConnection(int id, string? folder)
         {
             try
             {
@@ -126,7 +126,7 @@ namespace FileTransferApi.Controllers
                 if (credential == null)
                     return NotFound($"Credential with ID {id} not found");
 
-                var result = await _fileTransferService.TestConnectionAsync(credential);
+                var result = await _fileTransferService.TestConnectionAsync(credential, folder);
                 return Ok(result);
             }
             catch (Exception ex)
