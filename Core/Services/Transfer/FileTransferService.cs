@@ -120,6 +120,8 @@ namespace Core.Services.Transfer
                     task.CopySubfolders);
 
                 HashSet<string> processedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int filesTransferred = 0;
+                int errorCount = 0;
 
                 foreach (var sourceFile in sourceFiles)
                 {
@@ -133,13 +135,22 @@ namespace Core.Services.Transfer
                         task.CreateSubfolders,
                         task.DeleteSourceFolderAfterTransfer);
 
-                    if (result.TransferSuccessful && task.DeleteSourceFolderAfterTransfer)
+                    if (result.TransferSuccessful)
                     {
-                        string parentFolder = Path.GetDirectoryName(sourceFile)?.Replace('\\', '/') ?? string.Empty;
-                        if (!string.IsNullOrEmpty(parentFolder))
+                        filesTransferred++;
+
+                        if (task.DeleteSourceFolderAfterTransfer)
                         {
-                            processedFolders.Add(parentFolder);
+                            string parentFolder = Path.GetDirectoryName(sourceFile)?.Replace('\\', '/') ?? string.Empty;
+                            if (!string.IsNullOrEmpty(parentFolder))
+                            {
+                                processedFolders.Add(parentFolder);
+                            }
                         }
+                    }
+                    else 
+                    {
+                        errorCount++;
                     }
                 }
 
@@ -156,21 +167,21 @@ namespace Core.Services.Transfer
                     }
                 }
 
+                execution.FilesTransferred = filesTransferred;
+                execution.ErrorCount = errorCount;
                 execution.EndTime = DateTime.UtcNow;
                 execution.Status = "Completed";
-                await _executionRepository.UpdateAsync(execution);
 
+                await _executionRepository.UpdateAsync(execution);
                 return execution;
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error executing task {task.Id}: {ex.Message}");
-
                 execution.EndTime = DateTime.UtcNow;
                 execution.Status = "Error";
                 execution.ErrorMessage = ex.Message;
                 await _executionRepository.UpdateAsync(execution);
-
                 return execution;
             }
         }
