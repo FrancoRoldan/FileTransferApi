@@ -6,6 +6,7 @@ using Renci.SshNet;
 using System.Text.RegularExpressions;
 using FluentFTP;
 using Core.Utils;
+using Mapster;
 
 namespace Core.Services.Transfer
 {
@@ -291,13 +292,18 @@ namespace Core.Services.Transfer
         {
             var existingCredential = await _credentialRepository.GetByIdAsync(credential.Id);
 
+            if (existingCredential == null)
+                throw new InvalidOperationException("Credential not found");
+
             if (!string.IsNullOrEmpty(credential.EncryptedPassword) &&
                 credential.EncryptedPassword != existingCredential.EncryptedPassword)
             {
                 credential.EncryptedPassword = _encryptionService.Encrypt(credential.EncryptedPassword);
             }
 
-            return await _credentialRepository.UpdateAsync(credential);
+            credential.Adapt(existingCredential); 
+
+            return await _credentialRepository.UpdateAsync(existingCredential);
         }
 
         public async Task<bool> DeleteCredentialAsync(int credentialId)
