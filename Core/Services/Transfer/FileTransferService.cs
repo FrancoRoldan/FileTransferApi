@@ -48,7 +48,7 @@ namespace Core.Services.Transfer
             var existingTask = await _taskRepository.GetByIdAsync(task.Id);
 
             if (existingTask == null)
-                throw new InvalidOperationException("Credential not found");
+                throw new InvalidOperationException("Task not found");
 
             task.Adapt(existingTask);
 
