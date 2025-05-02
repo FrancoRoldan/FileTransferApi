@@ -7,6 +7,7 @@ using System.Text.RegularExpressions;
 using FluentFTP;
 using Core.Utils;
 using Mapster;
+using System.Net;
 
 namespace Core.Services.Transfer
 {
@@ -44,7 +45,14 @@ namespace Core.Services.Transfer
 
         public async Task<FileTransferTask> UpdateTaskAsync(FileTransferTask task)
         {
-            return await _taskRepository.UpdateAsync(task);
+            var existingTask = await _taskRepository.GetByIdAsync(task.Id);
+
+            if (existingTask == null)
+                throw new InvalidOperationException("Credential not found");
+
+            task.Adapt(existingTask);
+
+            return await _taskRepository.UpdateAsync(existingTask);
         }
 
         public async Task<bool> DeleteTaskAsync(int taskId)
