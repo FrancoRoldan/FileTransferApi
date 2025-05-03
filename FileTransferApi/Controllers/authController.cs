@@ -50,7 +50,6 @@ namespace FileTransferApi.Controllers
         }
 
         [HttpPost("refresh")]
-        [Authorize]
         public IActionResult RefreshToken()
         {
             try
