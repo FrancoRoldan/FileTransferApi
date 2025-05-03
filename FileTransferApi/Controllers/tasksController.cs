@@ -81,7 +81,7 @@ namespace FileTransferApi.Controllers
             try
             {
                 var createdTask = await _fileTransferService.CreateTaskAsync(task.Adapt<FileTransferTask>());
-                return CreatedAtAction(nameof(GetTaskById), new { id = createdTask.Id }, createdTask);
+                return CreatedAtAction(nameof(GetTaskById), new { id = createdTask.Id }, createdTask.Adapt<FileTransferTaskResponse>());
             }
             catch (Exception ex)
             {
