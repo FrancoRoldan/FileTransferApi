@@ -4,6 +4,7 @@ using Core.Security;
 using Core.Services;
 using Core.Services.Login;
 using Core.Services.Transfer;
+using Core.Utils;
 using Data.Context;
 using Data.Interfaces;
 using Data.Models;
@@ -115,9 +116,7 @@ if (seedData)
     }
 }
 
-TypeAdapterConfig<FileTransferTask, FileTransferTask>
-    .NewConfig()
-    .Ignore(dest => dest.ExecutionTimes);
+MapsterConfig.Configure();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
