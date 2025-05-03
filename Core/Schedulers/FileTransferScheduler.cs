@@ -5,6 +5,7 @@ using Data.Models;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 
 namespace Core.Schedulers
 {
@@ -45,16 +46,23 @@ namespace Core.Schedulers
 
         private async Task ProcessScheduledTasks(CancellationToken stoppingToken)
         {
-            DateTime now = DateTime.UtcNow;
+            DateTime now = DateTime.Now;
 
             using (var scope = _serviceProvider.CreateScope())
             {
                 var transferService = scope.ServiceProvider.GetRequiredService<IFileTransferService>();
                 var taskRepository = scope.ServiceProvider.GetRequiredService<IRepository<FileTransferTask>>();
+                var _transferTimeSlotRepository = scope.ServiceProvider.GetRequiredService<IRepository<TransferTimeSlot>>();
 
                 // Get all active tasks
                 var activeTasks = await taskRepository.GetAllAsync();
                 activeTasks = activeTasks.Where(t => t.IsActive);
+
+                foreach (FileTransferTask task in activeTasks)
+                {
+                    var timeSlots = await _transferTimeSlotRepository.GetAllAsync();
+                    task.ExecutionTimes = timeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+                }
 
                 foreach (var task in activeTasks)
                 {

@@ -109,7 +109,7 @@ namespace Core.Services.Transfer
                 task.ExecutionTimes = timeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
             }
 
-            return tasks;
+            return tasks.OrderBy(x => x.Id);
         }
 
         public async Task<IEnumerable<FileTransferTask>> GetActiveTasksAsync()
@@ -136,7 +136,7 @@ namespace Core.Services.Transfer
             var execution = new TransferExecution
             {
                 FileTransferTaskId = task.Id,
-                StartTime = DateTime.UtcNow,
+                StartTime = DateTime.Now,
                 Status = "In Progress"
             };
 
@@ -206,7 +206,7 @@ namespace Core.Services.Transfer
 
                 execution.FilesTransferred = filesTransferred;
                 execution.ErrorCount = errorCount;
-                execution.EndTime = DateTime.UtcNow;
+                execution.EndTime = DateTime.Now;
                 execution.Status = "Completed";
 
                 await _executionRepository.UpdateAsync(execution);
@@ -215,7 +215,7 @@ namespace Core.Services.Transfer
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Error executing task {task.Id}: {ex.Message}");
-                execution.EndTime = DateTime.UtcNow;
+                execution.EndTime = DateTime.Now;
                 execution.Status = "Error";
                 execution.ErrorMessage = ex.Message;
                 await _executionRepository.UpdateAsync(execution);
@@ -230,7 +230,7 @@ namespace Core.Services.Transfer
                 return false;
 
             execution.Status = "Cancelled";
-            execution.EndTime = DateTime.UtcNow;
+            execution.EndTime = DateTime.Now;
             await _executionRepository.UpdateAsync(execution);
 
             return true;
@@ -379,7 +379,8 @@ namespace Core.Services.Transfer
 
         public async Task<IEnumerable<ServerCredential>> GetAllCredentialsAsync()
         {
-            return await _credentialRepository.GetAllAsync();
+            var credentials = await _credentialRepository.GetAllAsync();
+            return credentials.OrderBy(x => x.Id); ;
         }
 
         #endregion
