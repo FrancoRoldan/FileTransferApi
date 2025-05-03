@@ -8,6 +8,8 @@ using FluentFTP;
 using Core.Utils;
 using Mapster;
 using System.Net;
+using System;
+using System.Threading.Tasks;
 
 namespace Core.Services.Transfer
 {
@@ -17,6 +19,7 @@ namespace Core.Services.Transfer
         private readonly IRepository<ServerCredential> _credentialRepository;
         private readonly IRepository<TransferExecution> _executionRepository;
         private readonly IRepository<TransferredFile> _transferredFileRepository;
+        private readonly IRepository<TransferTimeSlot> _transferTimeSlotRepository;
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<FileTransferService> _logger;
 
@@ -25,6 +28,7 @@ namespace Core.Services.Transfer
             IRepository<ServerCredential> credentialRepository,
             IRepository<TransferExecution> executionRepository,
             IRepository<TransferredFile> transferredFileRepository,
+            IRepository<TransferTimeSlot> transferTimeSlotRepository,
             IEncryptionService encryptionService,
             ILogger<FileTransferService> logger)
         {
@@ -32,6 +36,7 @@ namespace Core.Services.Transfer
             _credentialRepository = credentialRepository;
             _executionRepository = executionRepository;
             _transferredFileRepository = transferredFileRepository;
+            _transferTimeSlotRepository = transferTimeSlotRepository;
             _encryptionService = encryptionService;
             _logger = logger;
         }
@@ -46,15 +51,39 @@ namespace Core.Services.Transfer
         public async Task<FileTransferTask> UpdateTaskAsync(FileTransferTask task)
         {
             var existingTask = await _taskRepository.GetByIdAsync(task.Id);
-
             if (existingTask == null)
                 throw new InvalidOperationException("Task not found");
 
+            var existingTimeSlots = await _transferTimeSlotRepository.GetAllAsync();
+            existingTask.ExecutionTimes = existingTimeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+
+            foreach (var exec in existingTask.ExecutionTimes.ToList())
+            {
+                await _transferTimeSlotRepository.DeleteAsync(exec.Id);
+            }
+
+            existingTask.ExecutionTimes.Clear();
+
+            if (task.ExecutionTimes != null && task.ExecutionTimes.Any())
+            {
+                foreach (var slotDto in task.ExecutionTimes)
+                {
+                    var newTimeSlot = new TransferTimeSlot
+                    {
+                        FileTransferTaskId = task.Id,
+                        ExecutionTime = slotDto.ExecutionTime,
+                        CreatedAt = DateTime.Now
+                    };
+
+                    existingTask.ExecutionTimes.Add(newTimeSlot);
+                }
+            }
+
+            
             task.Adapt(existingTask);
 
             return await _taskRepository.UpdateAsync(existingTask);
         }
-
         public async Task<bool> DeleteTaskAsync(int taskId)
         {
             var task = await _taskRepository.GetByIdAsync(taskId);
@@ -72,7 +101,15 @@ namespace Core.Services.Transfer
 
         public async Task<IEnumerable<FileTransferTask>> GetAllTasksAsync()
         {
-            return await _taskRepository.GetAllAsync();
+            IEnumerable<FileTransferTask> tasks = await _taskRepository.GetAllAsync();
+
+            foreach(FileTransferTask task in tasks)
+            {
+                var timeSlots = await _transferTimeSlotRepository.GetAllAsync();
+                task.ExecutionTimes = timeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+            }
+
+            return tasks;
         }
 
         public async Task<IEnumerable<FileTransferTask>> GetActiveTasksAsync()

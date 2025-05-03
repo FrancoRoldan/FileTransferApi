@@ -39,7 +39,7 @@ namespace Data.Dtos.FileTransfer
         public bool IsSunday { get; set; } = false;
 
         // Hora(s) de ejecución para transferencias programadas
-        public List<TransferTimeSlot?> ExecutionTimes { get; set; } = new List<TransferTimeSlot?>();
+        public List<TransferTimeSlotRequest?> ExecutionTimes { get; set; } = new List<TransferTimeSlotRequest?>();
 
         // Opciones avanzadas de programación
         public string? CronExpression { get; set; } // Para programaciones más complejas

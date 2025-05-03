@@ -8,6 +8,7 @@ using Data.Context;
 using Data.Interfaces;
 using Data.Models;
 using Data.Repositories;
+using Mapster;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -47,6 +48,7 @@ builder.Services.AddScoped<IRepository<FileTransferTask>, Repository<FileTransfe
 builder.Services.AddScoped<IRepository<ServerCredential>, Repository<ServerCredential>>();
 builder.Services.AddScoped<IRepository<TransferExecution>, Repository<TransferExecution>>();
 builder.Services.AddScoped<IRepository<TransferredFile>, Repository<TransferredFile>>();
+builder.Services.AddScoped<IRepository<TransferTimeSlot>, Repository<TransferTimeSlot>>();
 //services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ILoginAttemptService, LoginAttemptService>();
@@ -112,6 +114,10 @@ if (seedData)
         DatabaseSeeder.SeedAdminUser(dbContext, userService);
     }
 }
+
+TypeAdapterConfig<FileTransferTask, FileTransferTask>
+    .NewConfig()
+    .Ignore(dest => dest.ExecutionTimes);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
