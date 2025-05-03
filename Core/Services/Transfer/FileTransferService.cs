@@ -90,6 +90,15 @@ namespace Core.Services.Transfer
             if (task == null)
                 return false;
 
+            var existingTimeSlots = await _transferTimeSlotRepository.GetAllAsync();
+            task.ExecutionTimes = existingTimeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+
+            foreach (var exec in task.ExecutionTimes.ToList())
+            {
+                await _transferTimeSlotRepository.DeleteAsync(exec.Id);
+            }
+
+
             await _taskRepository.DeleteAsync(taskId);
             return true;
         }
