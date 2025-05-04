@@ -1,4 +1,5 @@
-﻿using Data.Models;
+﻿using Data.Dtos.FileTransfer;
+using Data.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,6 +15,7 @@ namespace Core.Services.Transfer
         Task<FileTransferTask> UpdateTaskAsync(FileTransferTask task);
         Task<bool> DeleteTaskAsync(int taskId);
         Task<FileTransferTask?> GetTaskByIdAsync(int taskId);
+        Task<PaginatedResponseDto<FileTransferTaskResponse>> GetPaginatedTasksAsync(int pageIndex, int pageSize);
         Task<IEnumerable<FileTransferTask>> GetAllTasksAsync();
         Task<IEnumerable<FileTransferTask>> GetActiveTasksAsync();
 

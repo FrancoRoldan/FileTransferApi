@@ -44,12 +44,13 @@ AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 //repositories
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
+builder.Services.AddScoped<IFileTransferTaskRepository, FileTransferTaskRepository>();
+builder.Services.AddScoped<ITransferTimeSlotRepository, TransferTimeSlotRepository>();
 
-builder.Services.AddScoped<IRepository<FileTransferTask>, Repository<FileTransferTask>>();
 builder.Services.AddScoped<IRepository<ServerCredential>, Repository<ServerCredential>>();
 builder.Services.AddScoped<IRepository<TransferExecution>, Repository<TransferExecution>>();
 builder.Services.AddScoped<IRepository<TransferredFile>, Repository<TransferredFile>>();
-builder.Services.AddScoped<IRepository<TransferTimeSlot>, Repository<TransferTimeSlot>>();
+
 //services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ILoginAttemptService, LoginAttemptService>();
@@ -57,6 +58,7 @@ builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
 builder.Services.AddScoped<IFileTransferService, FileTransferService>();
+
 // Register background scheduler
 builder.Services.AddHostedService<FileTransferScheduler>();
 

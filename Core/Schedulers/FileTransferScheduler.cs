@@ -51,8 +51,8 @@ namespace Core.Schedulers
             using (var scope = _serviceProvider.CreateScope())
             {
                 var transferService = scope.ServiceProvider.GetRequiredService<IFileTransferService>();
-                var taskRepository = scope.ServiceProvider.GetRequiredService<IRepository<FileTransferTask>>();
-                var _transferTimeSlotRepository = scope.ServiceProvider.GetRequiredService<IRepository<TransferTimeSlot>>();
+                var taskRepository = scope.ServiceProvider.GetRequiredService<IFileTransferTaskRepository>();
+                var _transferTimeSlotRepository = scope.ServiceProvider.GetRequiredService<ITransferTimeSlotRepository>();
 
                 // Get all active tasks
                 var activeTasks = await taskRepository.GetAllAsync();
@@ -60,8 +60,8 @@ namespace Core.Schedulers
 
                 foreach (FileTransferTask task in activeTasks)
                 {
-                    var timeSlots = await _transferTimeSlotRepository.GetAllAsync();
-                    task.ExecutionTimes = timeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+                    var timeSlots = await _transferTimeSlotRepository.GetAllByTaskId(task.Id);
+                    task.ExecutionTimes = timeSlots.ToList();
                 }
 
                 foreach (var task in activeTasks)

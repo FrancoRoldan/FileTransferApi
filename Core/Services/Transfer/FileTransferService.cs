@@ -7,25 +7,26 @@ using System.Text.RegularExpressions;
 using FluentFTP;
 using Core.Utils;
 using Mapster;
+using Data.Dtos.FileTransfer;
 
 namespace Core.Services.Transfer
 {
     public class FileTransferService : IFileTransferService
     {
-        private readonly IRepository<FileTransferTask> _taskRepository;
+        private readonly IFileTransferTaskRepository _taskRepository;
         private readonly IRepository<ServerCredential> _credentialRepository;
         private readonly IRepository<TransferExecution> _executionRepository;
         private readonly IRepository<TransferredFile> _transferredFileRepository;
-        private readonly IRepository<TransferTimeSlot> _transferTimeSlotRepository;
+        private readonly ITransferTimeSlotRepository _transferTimeSlotRepository;
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<FileTransferService> _logger;
 
         public FileTransferService(
-            IRepository<FileTransferTask> taskRepository,
+            IFileTransferTaskRepository taskRepository,
             IRepository<ServerCredential> credentialRepository,
             IRepository<TransferExecution> executionRepository,
             IRepository<TransferredFile> transferredFileRepository,
-            IRepository<TransferTimeSlot> transferTimeSlotRepository,
+            ITransferTimeSlotRepository transferTimeSlotRepository,
             IEncryptionService encryptionService,
             ILogger<FileTransferService> logger)
         {
@@ -51,8 +52,8 @@ namespace Core.Services.Transfer
             if (existingTask == null)
                 throw new InvalidOperationException("Task not found");
 
-            var existingTimeSlots = await _transferTimeSlotRepository.GetAllAsync();
-            existingTask.ExecutionTimes = existingTimeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+            var timeSlots = await _transferTimeSlotRepository.GetAllByTaskId(task.Id);
+            existingTask.ExecutionTimes = timeSlots.ToList();
 
             foreach (var exec in existingTask.ExecutionTimes.ToList())
             {
@@ -87,8 +88,8 @@ namespace Core.Services.Transfer
             if (task == null)
                 return false;
 
-            var existingTimeSlots = await _transferTimeSlotRepository.GetAllAsync();
-            task.ExecutionTimes = existingTimeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+            var timeSlots = await _transferTimeSlotRepository.GetAllByTaskId(task.Id);
+            task.ExecutionTimes = timeSlots.ToList();
 
             foreach (var exec in task.ExecutionTimes.ToList())
             {
@@ -105,14 +106,35 @@ namespace Core.Services.Transfer
             return await _taskRepository.GetByIdAsync(taskId);
         }
 
+        public async Task<PaginatedResponseDto<FileTransferTaskResponse>> GetPaginatedTasksAsync(int pageIndex, int pageSize)
+        {
+            var totalCount = await _taskRepository.CountAsync();
+
+            var tasks = await _taskRepository.GetPaginatedAsync(pageIndex, pageSize);
+
+            foreach (var task in tasks)
+            {
+                var timeSlots = await _transferTimeSlotRepository.GetAllByTaskId(task.Id);
+                task.ExecutionTimes = timeSlots.ToList();
+            }
+
+            return new PaginatedResponseDto<FileTransferTaskResponse>
+            {
+                Items = tasks.Adapt<List<FileTransferTaskResponse>>(),
+                TotalCount = totalCount,
+                PageIndex = pageIndex,
+                PageSize = pageSize
+            };
+        }
+
         public async Task<IEnumerable<FileTransferTask>> GetAllTasksAsync()
         {
             IEnumerable<FileTransferTask> tasks = await _taskRepository.GetAllAsync();
 
             foreach(FileTransferTask task in tasks)
             {
-                var timeSlots = await _transferTimeSlotRepository.GetAllAsync();
-                task.ExecutionTimes = timeSlots.Where(x => x.FileTransferTaskId == task.Id).ToList();
+                var timeSlots = await _transferTimeSlotRepository.GetAllByTaskId(task.Id);
+                task.ExecutionTimes = timeSlots.ToList();
             }
 
             return tasks.OrderBy(x => x.Id);

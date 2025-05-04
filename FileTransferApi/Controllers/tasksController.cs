@@ -24,6 +24,24 @@ namespace FileTransferApi.Controllers
         }
 
         [Authorize]
+        [HttpGet("paginated")]
+        public async Task<ActionResult<PaginatedResponseDto<FileTransferTaskResponse>>> GetPaginatedTasks(
+            [FromQuery] int pageIndex = 0,
+            [FromQuery] int pageSize = 10)
+        {
+            try
+            {
+                var result = await _fileTransferService.GetPaginatedTasksAsync(pageIndex, pageSize);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving paginated tasks");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error retrieving paginated tasks");
+            }
+        }
+
+        [Authorize]
         [HttpGet("")]
         public async Task<ActionResult<IEnumerable<FileTransferTaskResponse>>> GetAllTasks()
         {
