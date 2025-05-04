@@ -7,9 +7,6 @@ using System.Text.RegularExpressions;
 using FluentFTP;
 using Core.Utils;
 using Mapster;
-using System.Net;
-using System;
-using System.Threading.Tasks;
 
 namespace Core.Services.Transfer
 {
@@ -564,14 +561,14 @@ namespace Core.Services.Transfer
         }
 
         private async Task<TransferredFile> TransferFileAsync(
-            int executionId,
-            ServerCredential source,
-            ServerCredential destination,
-            string sourceFilePath,
-            string sourceBaseFolder,
-            string destinationBaseFolder,
-            bool createSubfolders,
-            bool deleteSource)
+    int executionId,
+    ServerCredential source,
+    ServerCredential destination,
+    string sourceFilePath,
+    string sourceBaseFolder,
+    string destinationBaseFolder,
+    bool createSubfolders,
+    bool deleteSource)
         {
             string fileName = Path.GetFileName(sourceFilePath);
             string destinationFilePath;
@@ -592,38 +589,25 @@ namespace Core.Services.Transfer
                 FileName = fileName,
                 SourcePath = sourceFilePath,
                 DestinationPath = destinationFilePath,
-                FileSize = 0, 
+                FileSize = 0,
                 TransferSuccessful = false
             };
 
             try
             {
-                if (source.ServerType.ToUpper() == "NETWORK" && destination.ServerType.ToUpper() == "NETWORK")
-                {
-                    return await TransferNetworkFileAsync(
-                        executionId,
-                        source,
-                        destination,
-                        sourceFilePath,
-                        sourceBaseFolder,
-                        destinationBaseFolder,
-                        createSubfolders,
-                        deleteSource);
-                }
-
                 string tempFile = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 
                 try
                 {
                     await DownloadFileAsync(source, sourceFilePath, tempFile);
 
+                    var fileInfo = new FileInfo(tempFile);
+                    transferredFile.FileSize = fileInfo.Length;
+
                     string destinationDir = Path.GetDirectoryName(destinationFilePath)!;
                     await EnsureDirectoryExistsAsync(destination, destinationDir);
 
                     await UploadFileAsync(destination, tempFile, destinationFilePath);
-
-                    var fileInfo = new FileInfo(tempFile);
-                    transferredFile.FileSize = fileInfo.Length;
 
                     if (deleteSource)
                     {
@@ -719,9 +703,16 @@ namespace Core.Services.Transfer
                     break;
 
                 case "NETWORK":
-                    string networkPath = remotePath.Replace('/', '\\');
+                    string networkPath;
 
-                    string directory = Path.GetDirectoryName(networkPath);
+                    if (remotePath.StartsWith("/"))
+                    {
+                        remotePath = remotePath.TrimStart('/');
+                    }
+
+                    networkPath = BuildNetworkPath(credential, remotePath);
+
+                    string directory = Path.GetDirectoryName(networkPath)!;
                     if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                     {
                         Directory.CreateDirectory(directory);
@@ -731,7 +722,7 @@ namespace Core.Services.Transfer
                     {
                         string basePath = credential.Host.StartsWith("\\\\") ? credential.Host : $"\\\\{credential.Host}";
                         using (var networkConnection = new NetworkConnection(
-                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword)))
+                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword!)))
                         {
                             File.Copy(localPath, networkPath, true);
                         }
@@ -774,7 +765,7 @@ namespace Core.Services.Transfer
                     {
                         string basePath = credential.Host.StartsWith("\\\\") ? credential.Host : $"\\\\{credential.Host}";
                         using (var networkConnection = new NetworkConnection(
-                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword)))
+                            basePath, credential.Username, _encryptionService.Decrypt(credential.EncryptedPassword!)))
                         {
                             if (File.Exists(networkPath))
                             {
@@ -989,108 +980,6 @@ namespace Core.Services.Transfer
 
             return files;
         }
-
-        private async Task<TransferredFile> TransferNetworkFileAsync(
-            int executionId,
-            ServerCredential source,
-            ServerCredential destination,
-            string sourceFilePath,
-            string sourceFolderPath,
-            string destinationFolderPath,
-            bool createSubfolders,
-            bool deleteSource)
-        {
-            string fileName = Path.GetFileName(sourceFilePath);
-            string destinationFilePath;
-
-            string sourceNetworkPath = sourceFilePath.Replace('/', '\\');
-            string destBasePath = BuildNetworkPath(destination, destinationFolderPath);
-
-            sourceFilePath = sourceFilePath.Substring(source.Host.Length + 2);
-
-            if (createSubfolders && sourceFilePath.StartsWith(sourceFolderPath, StringComparison.OrdinalIgnoreCase))
-            {
-                string relativePath = sourceFilePath.Substring(sourceFolderPath.Length).TrimStart('\\', '/');
-                string relativeDirectory = Path.GetDirectoryName(relativePath)!;
-
-                if (!string.IsNullOrEmpty(relativeDirectory))
-                {
-                    destinationFilePath = Path.Combine(destBasePath, relativeDirectory, fileName).Replace('/', '\\');
-                }
-                else
-                {
-                    destinationFilePath = Path.Combine(destBasePath, fileName).Replace('/', '\\');
-                }
-            }
-            else
-            {
-                destinationFilePath = Path.Combine(destBasePath, fileName).Replace('/', '\\');
-            }
-
-            var transferredFile = new TransferredFile
-            {
-                TransferExecutionId = executionId,
-                FileName = fileName,
-                SourcePath = sourceFilePath,
-                DestinationPath = destinationFilePath,
-                FileSize = 0,
-                TransferSuccessful = false
-            };
-
-            try
-            {
-                NetworkConnection sourceConnection = null;
-                NetworkConnection destConnection = null;
-
-                try
-                {
-                    if (!string.IsNullOrEmpty(source.Username))
-                    {
-                        string sourcePath = source.Host.StartsWith("\\\\") ? source.Host : $"\\\\{source.Host}";
-                        sourceConnection = new NetworkConnection(sourcePath, source.Username, _encryptionService.Decrypt(source.EncryptedPassword));
-                    }
-
-                    if (!string.IsNullOrEmpty(destination.Username))
-                    {
-                        string destPath = destination.Host.StartsWith("\\\\") ? destination.Host : $"\\\\{destination.Host}";
-                        destConnection = new NetworkConnection(destPath, destination.Username, _encryptionService.Decrypt(destination.EncryptedPassword));
-                    }
-
-                    string destinationDir = Path.GetDirectoryName(destinationFilePath)!;
-                    if (!string.IsNullOrEmpty(destinationDir) && !Directory.Exists(destinationDir))
-                    {
-                        Directory.CreateDirectory(destinationDir);
-                    }
-
-                    var fileInfo = new FileInfo(sourceNetworkPath);
-                    transferredFile.FileSize = fileInfo.Length;
-
-                    await Task.Run(() => File.Copy(sourceNetworkPath, destinationFilePath, true));
-
-                    if (deleteSource)
-                    {
-                        await Task.Run(() => File.Delete(sourceNetworkPath));
-                    }
-
-                    transferredFile.TransferSuccessful = true;
-                }
-                finally
-                {
-                    sourceConnection?.Dispose();
-                    destConnection?.Dispose();
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, $"Error transferring network file {sourceFilePath}: {ex.Message}");
-                transferredFile.ErrorMessage = ex.Message;
-            }
-
-            return await _transferredFileRepository.AddAsync(transferredFile);
-        }
-
-
-
         private async Task DeleteNetworkFolderAsync(string folderPath)
         {
             try
