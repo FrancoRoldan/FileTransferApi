@@ -46,8 +46,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
 builder.Services.AddScoped<IFileTransferTaskRepository, FileTransferTaskRepository>();
 builder.Services.AddScoped<ITransferTimeSlotRepository, TransferTimeSlotRepository>();
+builder.Services.AddScoped<IServerCredentialRepository, ServerCredentialRepository>();
 
-builder.Services.AddScoped<IRepository<ServerCredential>, Repository<ServerCredential>>();
 builder.Services.AddScoped<IRepository<TransferExecution>, Repository<TransferExecution>>();
 builder.Services.AddScoped<IRepository<TransferredFile>, Repository<TransferredFile>>();
 

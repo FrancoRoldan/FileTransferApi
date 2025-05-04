@@ -14,7 +14,7 @@ namespace Core.Services.Transfer
     public class FileTransferService : IFileTransferService
     {
         private readonly IFileTransferTaskRepository _taskRepository;
-        private readonly IRepository<ServerCredential> _credentialRepository;
+        private readonly IServerCredentialRepository _credentialRepository;
         private readonly IRepository<TransferExecution> _executionRepository;
         private readonly IRepository<TransferredFile> _transferredFileRepository;
         private readonly ITransferTimeSlotRepository _transferTimeSlotRepository;
@@ -23,7 +23,7 @@ namespace Core.Services.Transfer
 
         public FileTransferService(
             IFileTransferTaskRepository taskRepository,
-            IRepository<ServerCredential> credentialRepository,
+            IServerCredentialRepository credentialRepository,
             IRepository<TransferExecution> executionRepository,
             IRepository<TransferredFile> transferredFileRepository,
             ITransferTimeSlotRepository transferTimeSlotRepository,
@@ -403,6 +403,21 @@ namespace Core.Services.Transfer
         public async Task<ServerCredential?> GetCredentialByIdAsync(int credentialId)
         {
             return await _credentialRepository.GetByIdAsync(credentialId);
+        }
+
+        public async Task<PaginatedResponseDto<ServerCredential>> GetPaginatedCredentialsAsync(int pageIndex, int pageSize)
+        {
+            var totalCount = await _credentialRepository.CountAsync();
+
+            var tasks = await _credentialRepository.GetPaginatedAsync(pageIndex, pageSize);
+
+            return new PaginatedResponseDto<ServerCredential>
+            {
+                Items = tasks.Adapt<List<ServerCredential>>(),
+                TotalCount = totalCount,
+                PageIndex = pageIndex,
+                PageSize = pageSize
+            };
         }
 
         public async Task<IEnumerable<ServerCredential>> GetAllCredentialsAsync()
