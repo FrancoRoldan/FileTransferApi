@@ -93,24 +93,22 @@ namespace Core.Schedulers
 
         private bool ShouldExecuteTask(FileTransferTask task, DateTime currentTimeUtc)
         {
-            // One-time execution
             if (task.ScheduleType == TransferScheduleType.OneTime)
             {
                 if (!task.OneTimeExecutionDate.HasValue)
                     return false;
 
-                // Check if the scheduled time is within the last check interval
                 TimeSpan diff = currentTimeUtc - task.OneTimeExecutionDate.Value;
                 return diff >= TimeSpan.Zero && diff <= _checkInterval;
             }
 
-            // Custom cron expression
             if (task.ScheduleType == TransferScheduleType.Custom && !string.IsNullOrEmpty(task.CronExpression))
             {
                 try
                 {
                     var cronExpression = CronExpression.Parse(task.CronExpression);
-                    var nextOccurrence = cronExpression.GetNextOccurrence(currentTimeUtc.AddMinutes(-1), TimeZoneInfo.Utc);
+                    var fromUtc = DateTime.SpecifyKind(currentTimeUtc.AddMinutes(-1), DateTimeKind.Utc);
+                    var nextOccurrence = cronExpression.GetNextOccurrence(fromUtc, TimeZoneInfo.Utc);
 
                     return nextOccurrence.HasValue &&
                            nextOccurrence.Value <= currentTimeUtc &&
@@ -123,12 +121,16 @@ namespace Core.Schedulers
                 }
             }
 
-            // Daily, Weekly or Monthly schedules
+            if (task.ScheduleType == TransferScheduleType.Monthly)
+            {
+                return task.OneTimeExecutionDate.HasValue &&
+                       task.OneTimeExecutionDate.Value.Day == currentTimeUtc.Day;
+            }
+
             List<TimeSpan> executionTimes = task.ExecutionTimes.Select(t => t.ExecutionTime).ToList();
             if (executionTimes.Count == 0)
                 return false;
 
-            // Check if current time matches any execution time (considering check interval)
             foreach (var execTime in executionTimes)
             {
                 DateTime scheduledTimeToday = new DateTime(
@@ -142,14 +144,11 @@ namespace Core.Schedulers
 
                 TimeSpan diff = currentTimeUtc - scheduledTimeToday;
 
-                // If the current time is within our check interval of the scheduled time
                 if (diff >= TimeSpan.Zero && diff <= _checkInterval)
                 {
-                    // For Daily tasks, always run
                     if (task.ScheduleType == TransferScheduleType.Daily)
                         return true;
 
-                    // For Weekly tasks, check day of week
                     if (task.ScheduleType == TransferScheduleType.Weekly)
                     {
                         switch (currentTimeUtc.DayOfWeek)
@@ -171,14 +170,6 @@ namespace Core.Schedulers
                             default:
                                 return false;
                         }
-                    }
-
-                    // For Monthly tasks, simple implementation: same day each month
-                    if (task.ScheduleType == TransferScheduleType.Monthly)
-                    {
-                        // This assumes the OneTimeExecutionDate's day is the monthly execution day
-                        return task.OneTimeExecutionDate.HasValue &&
-                               task.OneTimeExecutionDate.Value.Day == currentTimeUtc.Day;
                     }
                 }
             }
