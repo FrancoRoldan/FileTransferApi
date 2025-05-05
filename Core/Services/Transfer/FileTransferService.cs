@@ -120,7 +120,7 @@ namespace Core.Services.Transfer
 
             return new PaginatedResponseDto<FileTransferTaskResponse>
             {
-                Items = tasks.Adapt<List<FileTransferTaskResponse>>(),
+                Items = tasks.OrderBy(f => f.Id).Adapt<List<FileTransferTaskResponse>>(),
                 TotalCount = totalCount,
                 PageIndex = pageIndex,
                 PageSize = pageSize
@@ -413,7 +413,7 @@ namespace Core.Services.Transfer
 
             return new PaginatedResponseDto<ServerCredential>
             {
-                Items = tasks.Adapt<List<ServerCredential>>(),
+                Items = tasks.OrderBy(t => t.Id).Adapt<List<ServerCredential>>(),
                 TotalCount = totalCount,
                 PageIndex = pageIndex,
                 PageSize = pageSize
