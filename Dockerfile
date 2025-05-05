@@ -3,14 +3,14 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine3.18 AS build-env
 WORKDIR /app
 
 # Copy csproj and restore as distinct layers
-COPY ./BoardApi/*.csproj ./BoardApi/
+COPY ./FileTransferApi/*.csproj ./FileTransferApi/
 COPY ./Core/*.csproj ./Core/
 COPY ./Data/*.csproj ./Data/
-RUN dotnet restore "BoardApi/Board.Api.csproj"
+RUN dotnet restore "FileTransferApi/FileTransferApi.csproj"
 
 # Copy everything else and build
 COPY . ./
-RUN dotnet publish "BoardApi/Board.Api.csproj" -c Release -o publish   
+RUN dotnet publish "FileTransferApi/FileTransferApi.csproj" -c Release -o publish   
 
 # Build runtime image
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine3.18
@@ -30,4 +30,4 @@ ENV ASPNETCORE_URLS http://+:80
 
 EXPOSE 80
 
-ENTRYPOINT ["dotnet", "Board.Api.dll"]
+ENTRYPOINT ["dotnet", "FileTransferApi.dll"]
