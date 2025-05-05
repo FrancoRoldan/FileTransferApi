@@ -106,11 +106,11 @@ namespace Core.Services.Transfer
             return await _taskRepository.GetByIdAsync(taskId);
         }
 
-        public async Task<PaginatedResponseDto<FileTransferTaskResponse>> GetPaginatedTasksAsync(int pageIndex, int pageSize)
+        public async Task<PaginatedResponseDto<FileTransferTaskResponse>> GetPaginatedTasksAsync(int pageIndex, int pageSize, string searchTerm = "")
         {
-            var totalCount = await _taskRepository.CountAsync();
+            var totalCount = await _taskRepository.CountAsync(searchTerm);
 
-            var tasks = await _taskRepository.GetPaginatedAsync(pageIndex, pageSize);
+            var tasks = await _taskRepository.GetPaginatedAsync(pageIndex, pageSize,searchTerm);
 
             foreach (var task in tasks)
             {

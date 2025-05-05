@@ -14,17 +14,49 @@ namespace Data.Repositories
     {
         public FileTransferTaskRepository(AppDbContext context) : base(context) { }
 
-        public async Task<IEnumerable<FileTransferTask>> GetPaginatedAsync(int pageIndex, int pageSize)
+        public async Task<IEnumerable<FileTransferTask>> GetPaginatedAsync(int pageIndex, int pageSize, string searchTerm = "")
         {
-            return await _dbSet
-            .Skip(pageSize * pageIndex)
-            .Take(pageSize)
-            .ToListAsync();
+            IQueryable<FileTransferTask> query = _dbSet;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+
+                query = query.Where(ft =>
+                    ft.Name.ToLower().Contains(searchTerm) ||
+                    ft.Description.ToLower().Contains(searchTerm) ||
+                    ft.SourceFolder.ToLower().Contains(searchTerm) ||
+                    ft.DestinationFolder.ToLower().Contains(searchTerm) ||
+                    (ft.FilePattern != null && ft.FilePattern.ToLower().Contains(searchTerm)) ||
+                    (ft.CronExpression != null && ft.CronExpression.Contains(searchTerm)) 
+                );
+            }
+
+            return await query
+                .Skip(pageIndex * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
         }
 
-        public async Task<int> CountAsync()
+        public async Task<int> CountAsync(string searchTerm = "")
         {
-            return await _dbSet.CountAsync();
+            IQueryable<FileTransferTask> query = _dbSet;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+
+                query = query.Where(ft =>
+                    ft.Name.ToLower().Contains(searchTerm) ||
+                    ft.Description.ToLower().Contains(searchTerm) ||
+                    ft.SourceFolder.ToLower().Contains(searchTerm) ||
+                    ft.DestinationFolder.ToLower().Contains(searchTerm) ||
+                    (ft.FilePattern != null && ft.FilePattern.ToLower().Contains(searchTerm)) ||
+                    (ft.CronExpression != null && ft.CronExpression.Contains(searchTerm))
+                );
+            }
+
+            return await query.CountAsync();
         }
     }
 }

@@ -9,7 +9,7 @@ namespace Data.Interfaces
 {
     public interface IFileTransferTaskRepository : IRepository<FileTransferTask>
     {
-        Task<IEnumerable<FileTransferTask>> GetPaginatedAsync(int pageIndex, int pageSize);
-        Task<int> CountAsync();
+        Task<IEnumerable<FileTransferTask>> GetPaginatedAsync(int pageIndex, int pageSize, string searchTerm);
+        Task<int> CountAsync(string searchTerm);
     }
 }

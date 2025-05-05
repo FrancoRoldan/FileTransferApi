@@ -15,7 +15,7 @@ namespace Core.Services.Transfer
         Task<FileTransferTask> UpdateTaskAsync(FileTransferTask task);
         Task<bool> DeleteTaskAsync(int taskId);
         Task<FileTransferTask?> GetTaskByIdAsync(int taskId);
-        Task<PaginatedResponseDto<FileTransferTaskResponse>> GetPaginatedTasksAsync(int pageIndex, int pageSize);
+        Task<PaginatedResponseDto<FileTransferTaskResponse>> GetPaginatedTasksAsync(int pageIndex, int pageSize,string searchTerm);
         Task<IEnumerable<FileTransferTask>> GetAllTasksAsync();
         Task<IEnumerable<FileTransferTask>> GetActiveTasksAsync();
 

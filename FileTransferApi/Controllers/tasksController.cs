@@ -27,11 +27,12 @@ namespace FileTransferApi.Controllers
         [HttpGet("paginated")]
         public async Task<ActionResult<PaginatedResponseDto<FileTransferTaskResponse>>> GetPaginatedTasks(
             [FromQuery] int pageIndex = 0,
-            [FromQuery] int pageSize = 10)
+            [FromQuery] int pageSize = 10,
+            [FromQuery] string searchTerm = "")
         {
             try
             {
-                var result = await _fileTransferService.GetPaginatedTasksAsync(pageIndex, pageSize);
+                var result = await _fileTransferService.GetPaginatedTasksAsync(pageIndex, pageSize, searchTerm);
                 return Ok(result);
             }
             catch (Exception ex)
