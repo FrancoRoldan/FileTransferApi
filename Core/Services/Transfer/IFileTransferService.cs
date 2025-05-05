@@ -34,7 +34,7 @@ namespace Core.Services.Transfer
         Task<ServerCredential> UpdateCredentialAsync(ServerCredential credential);
         Task<bool> DeleteCredentialAsync(int credentialId);
         Task<ServerCredential?> GetCredentialByIdAsync(int credentialId);
-        Task<PaginatedResponseDto<ServerCredential>> GetPaginatedCredentialsAsync(int pageIndex, int pageSize);
+        Task<PaginatedResponseDto<ServerCredential>> GetPaginatedCredentialsAsync(int pageIndex, int pageSize,string searchTerm);
         Task<IEnumerable<ServerCredential>> GetAllCredentialsAsync();
 
         // Testing connections

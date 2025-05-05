@@ -405,11 +405,10 @@ namespace Core.Services.Transfer
             return await _credentialRepository.GetByIdAsync(credentialId);
         }
 
-        public async Task<PaginatedResponseDto<ServerCredential>> GetPaginatedCredentialsAsync(int pageIndex, int pageSize)
+        public async Task<PaginatedResponseDto<ServerCredential>> GetPaginatedCredentialsAsync(int pageIndex, int pageSize, string searchTerm = "")
         {
-            var totalCount = await _credentialRepository.CountAsync();
-
-            var tasks = await _credentialRepository.GetPaginatedAsync(pageIndex, pageSize);
+            var totalCount = await _credentialRepository.CountAsync(searchTerm);
+            var tasks = await _credentialRepository.GetPaginatedAsync(pageIndex, pageSize, searchTerm);
 
             return new PaginatedResponseDto<ServerCredential>
             {

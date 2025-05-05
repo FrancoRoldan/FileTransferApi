@@ -10,7 +10,7 @@ namespace Data.Interfaces
 {
     public interface IServerCredentialRepository: IRepository<ServerCredential>
     {
-        Task<IEnumerable<ServerCredential>> GetPaginatedAsync(int pageIndex, int pageSize);
-        Task<int> CountAsync();
+        Task<IEnumerable<ServerCredential>> GetPaginatedAsync(int pageIndex, int pageSize, string searchTerm);
+        Task<int> CountAsync(string searchTerm);
     }
 }

@@ -14,17 +14,44 @@ namespace Data.Repositories
     {
         public ServerCredentialRepository(AppDbContext context) : base(context) { }
 
-        public async Task<IEnumerable<ServerCredential>> GetPaginatedAsync(int pageIndex, int pageSize)
+        public async Task<IEnumerable<ServerCredential>> GetPaginatedAsync(int pageIndex, int pageSize, string searchTerm)
         {
-            return await _dbSet
-            .Skip(pageSize * pageIndex)
-            .Take(pageSize)
-            .ToListAsync();
-        }
+            IQueryable<ServerCredential> query = _dbSet;
 
-        public async Task<int> CountAsync()
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+                query = query.Where(c =>
+                    c.Name.ToLower().Contains(searchTerm) ||
+                    c.ServerType.ToLower().Contains(searchTerm) ||
+                    c.Host.ToLower().Contains(searchTerm) ||
+                    c.Port.ToString().Contains(searchTerm) ||
+                    (c.Username != null && c.Username.ToLower().Contains(searchTerm))
+                );
+            }
+
+            return await query
+                .Skip(pageIndex * pageSize)
+                .Take(pageSize)
+                .ToListAsync();
+        }
+        public async Task<int> CountAsync(string searchTerm = "")
         {
-            return await _dbSet.CountAsync();
+            IQueryable<ServerCredential> query = _dbSet;
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                searchTerm = searchTerm.ToLower();
+                query = query.Where(c =>
+                    c.Name.ToLower().Contains(searchTerm) ||
+                    c.ServerType.ToLower().Contains(searchTerm) ||
+                    c.Host.ToLower().Contains(searchTerm) ||
+                    c.Port.ToString().Contains(searchTerm) ||
+                    (c.Username != null && c.Username.ToLower().Contains(searchTerm))
+                );
+            }
+
+            return await query.CountAsync();
         }
     }
 }
