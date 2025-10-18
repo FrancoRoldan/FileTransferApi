@@ -1,9 +1,10 @@
-﻿using Core.Services.Transfer;
+﻿using Core.Services.ConnectionTesting;
+using Core.Services.ExecutionManagement;
+using Core.Services.TasksManagement;
 using Data.Dtos.FileTransfer;
 using Data.Models;
 using Mapster;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FileTransferApi.Controllers
@@ -12,15 +13,21 @@ namespace FileTransferApi.Controllers
     [ApiController]
     public class tasksController : ControllerBase
     {
-        private readonly IFileTransferService _fileTransferService;
+        private readonly ITasksManagementService _fileTransferService;
+        private readonly IExecutionManagementService _executionManagementService;
+        private readonly IConnectionTestingService _connectionTestingService;   
         private readonly ILogger<tasksController> _logger;
 
         public tasksController(
-            IFileTransferService fileTransferService,
+            ITasksManagementService fileTransferService,
+            IExecutionManagementService executionManagementService,
+            IConnectionTestingService connectionTestingService,
             ILogger<tasksController> logger)
         {
             _fileTransferService = fileTransferService;
             _logger = logger;
+            _executionManagementService = executionManagementService;
+            _connectionTestingService = connectionTestingService;
         }
 
         [Authorize]
@@ -161,7 +168,7 @@ namespace FileTransferApi.Controllers
                 if (task == null)
                     return NotFound($"Task with ID {id} not found");
 
-                var execution = await _fileTransferService.ExecuteTaskAsync(id);
+                var execution = await _executionManagementService.ExecuteTaskAsync(id);
                 return Ok(execution.Adapt<TransferExecutionResponse>());
             }
             catch (Exception ex)
@@ -181,7 +188,7 @@ namespace FileTransferApi.Controllers
                 if (task == null)
                     return NotFound($"Task with ID {id} not found");
 
-                var result = await _fileTransferService.TestTaskConnectionsAsync(task);
+                var result = await _connectionTestingService.TestTaskConnectionsAsync(task);
                 return Ok(result);
             }
             catch (Exception ex)

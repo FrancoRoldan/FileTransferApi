@@ -2,8 +2,12 @@ using Core.Helpers;
 using Core.Schedulers;
 using Core.Security;
 using Core.Services;
+using Core.Services.ConnectionTesting;
+using Core.Services.Credential;
+using Core.Services.ExecutionManagement;
+using Core.Services.FileOperations;
 using Core.Services.Login;
-using Core.Services.Transfer;
+using Core.Services.TasksManagement;
 using Core.Utils;
 using Data.Context;
 using Data.Interfaces;
@@ -57,7 +61,12 @@ builder.Services.AddScoped<ILoginAttemptService, LoginAttemptService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddSingleton<IEncryptionService, EncryptionService>();
-builder.Services.AddScoped<IFileTransferService, FileTransferService>();
+builder.Services.AddScoped<ITasksManagementService, TasksManagementService>();
+builder.Services.AddScoped<IExecutionManagementService, ExecutionManagementService>();
+builder.Services.AddScoped<IConnectionTestingService, ConnectionTestingService>();
+builder.Services.AddScoped<IFileOperationsService, FileOperationsService>();
+builder.Services.AddScoped<IServerCredential, ServerCrediential>();
+
 
 // Register background scheduler
 builder.Services.AddHostedService<FileTransferScheduler>();

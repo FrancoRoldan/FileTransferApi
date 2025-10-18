@@ -1,10 +1,8 @@
-﻿using Core.Security;
-using Core.Services;
+﻿using Core.Services;
 using Data.Dtos.Users;
 using Data.Models;
 using Mapster;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using System.ComponentModel.DataAnnotations;
 

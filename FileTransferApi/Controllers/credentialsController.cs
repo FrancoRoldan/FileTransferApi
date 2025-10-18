@@ -1,4 +1,5 @@
-﻿using Core.Services.Transfer;
+﻿using Core.Services.ConnectionTesting;
+using Core.Services.Credential;
 using Data.Dtos.FileTransfer;
 using Data.Models;
 using Mapster;
@@ -12,14 +13,17 @@ namespace FileTransferApi.Controllers
     [ApiController]
     public class credentialsController : ControllerBase
     {
-        private readonly IFileTransferService _fileTransferService;
+        private readonly IServerCredential _serverCredentialService;
+        private readonly IConnectionTestingService _connectionService;
         private readonly ILogger<credentialsController> _logger;
 
         public credentialsController(
-            IFileTransferService fileTransferService,
+            IServerCredential serverCredentialService,
+            IConnectionTestingService connectionService,
             ILogger<credentialsController> logger)
         {
-            _fileTransferService = fileTransferService;
+            _serverCredentialService = serverCredentialService;
+            _connectionService = connectionService;
             _logger = logger;
         }
 
@@ -32,7 +36,7 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var result = await _fileTransferService.GetPaginatedCredentialsAsync(pageIndex, pageSize, searchTerm);
+                var result = await _serverCredentialService.GetPaginatedCredentialsAsync(pageIndex, pageSize, searchTerm);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -48,7 +52,7 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var credentials = await _fileTransferService.GetAllCredentialsAsync();
+                var credentials = await _serverCredentialService.GetAllCredentialsAsync();
                 return Ok(credentials);
             }
             catch (Exception ex)
@@ -64,7 +68,7 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var credential = await _fileTransferService.GetCredentialByIdAsync(id);
+                var credential = await _serverCredentialService.GetCredentialByIdAsync(id);
                 if (credential == null)
                     return NotFound($"Credential with ID {id} not found");
 
@@ -83,7 +87,7 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var createdCredential = await _fileTransferService.CreateCredentialAsync(credential.Adapt<ServerCredential>());
+                var createdCredential = await _serverCredentialService.CreateCredentialAsync(credential.Adapt<ServerCredential>());
                 return CreatedAtAction(nameof(GetCredentialById), new { id = createdCredential.Id }, createdCredential);
             }
             catch (Exception ex)
@@ -102,11 +106,11 @@ namespace FileTransferApi.Controllers
                 if (id != credential.Id)
                     return BadRequest("Credential ID mismatch");
 
-                var existingCredential = await _fileTransferService.GetCredentialByIdAsync(id);
+                var existingCredential = await _serverCredentialService.GetCredentialByIdAsync(id);
                 if (existingCredential == null)
                     return NotFound($"Credential with ID {id} not found");
 
-                var updatedCredential = await _fileTransferService.UpdateCredentialAsync(credential);
+                var updatedCredential = await _serverCredentialService.UpdateCredentialAsync(credential);
                 return Ok(updatedCredential);
             }
             catch (Exception ex)
@@ -122,7 +126,7 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var result = await _fileTransferService.DeleteCredentialAsync(id);
+                var result = await _serverCredentialService.DeleteCredentialAsync(id);
                 if (!result)
                     return NotFound($"Credential with ID {id} not found");
 
@@ -141,11 +145,11 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var credential = await _fileTransferService.GetCredentialByIdAsync(id);
+                var credential = await _serverCredentialService.GetCredentialByIdAsync(id);
                 if (credential == null)
                     return NotFound($"Credential with ID {id} not found");
 
-                var result = await _fileTransferService.TestConnectionAsync(credential, folder);
+                var result = await _connectionService.TestConnectionAsync(credential, folder);
                 return Ok(result);
             }
             catch (Exception ex)

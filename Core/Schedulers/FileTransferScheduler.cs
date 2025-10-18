@@ -1,4 +1,4 @@
-﻿using Core.Services.Transfer;
+﻿using Core.Services.ExecutionManagement;
 using Cronos;
 using Data.Interfaces;
 using Data.Models;
@@ -50,7 +50,6 @@ namespace Core.Schedulers
 
             using (var scope = _serviceProvider.CreateScope())
             {
-                var transferService = scope.ServiceProvider.GetRequiredService<IFileTransferService>();
                 var taskRepository = scope.ServiceProvider.GetRequiredService<IFileTransferTaskRepository>();
                 var _transferTimeSlotRepository = scope.ServiceProvider.GetRequiredService<ITransferTimeSlotRepository>();
 
@@ -77,7 +76,7 @@ namespace Core.Schedulers
                             {
                                 using (var executionScope = _serviceProvider.CreateScope())
                                 {
-                                    var executionService = executionScope.ServiceProvider.GetRequiredService<IFileTransferService>();
+                                    var executionService = executionScope.ServiceProvider.GetRequiredService<IExecutionManagementService>();
                                     await executionService.ExecuteTaskAsync(task);
                                 }
                             }

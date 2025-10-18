@@ -1,9 +1,8 @@
-﻿using Core.Services.Transfer;
+﻿using Core.Services.ExecutionManagement;
+using Core.Services.TasksManagement;
 using Data.Dtos.FileTransfer;
-using Data.Models;
 using Mapster;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FileTransferApi.Controllers
@@ -12,14 +11,17 @@ namespace FileTransferApi.Controllers
     [ApiController]
     public class executionsController : ControllerBase
     {
-        private readonly IFileTransferService _fileTransferService;
+        private readonly IExecutionManagementService _executionManagementService;
+        private readonly ITasksManagementService _tasksManagementService;
         private readonly ILogger<executionsController> _logger;
 
         public executionsController(
-            IFileTransferService fileTransferService,
+            IExecutionManagementService executionManagementService,
+            ITasksManagementService tasksManagementService,
             ILogger<executionsController> logger)
         {
-            _fileTransferService = fileTransferService;
+            _executionManagementService = executionManagementService;
+            _tasksManagementService = tasksManagementService;
             _logger = logger;
         }
 
@@ -29,11 +31,11 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var task = await _fileTransferService.GetTaskByIdAsync(taskId);
+                var task = await _tasksManagementService.GetTaskByIdAsync(taskId);
                 if (task == null)
                     return NotFound($"Task with ID {taskId} not found");
 
-                var executions = await _fileTransferService.GetTaskExecutionsAsync(taskId);
+                var executions = await _executionManagementService.GetTaskExecutionsAsync(taskId);
                 return Ok(executions.Adapt<List<TransferExecutionResponse>>());
             }
             catch (Exception ex)
@@ -49,7 +51,7 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var execution = await _fileTransferService.GetExecutionByIdAsync(id);
+                var execution = await _executionManagementService.GetExecutionByIdAsync(id);
                 if (execution == null)
                     return NotFound($"Execution with ID {id} not found");
 
@@ -68,11 +70,11 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var execution = await _fileTransferService.GetExecutionByIdAsync(id);
+                var execution = await _executionManagementService.GetExecutionByIdAsync(id);
                 if (execution == null)
                     return NotFound($"Execution with ID {id} not found");
 
-                var files = await _fileTransferService.GetExecutionFilesAsync(id);
+                var files = await _executionManagementService.GetExecutionFilesAsync(id);
                 return Ok(files.Adapt<List<TransferredFileResponse>>());
             }
             catch (Exception ex)
@@ -88,7 +90,7 @@ namespace FileTransferApi.Controllers
         {
             try
             {
-                var result = await _fileTransferService.CancelExecutionAsync(id);
+                var result = await _executionManagementService.CancelExecutionAsync(id);
                 if (!result)
                     return NotFound($"Execution with ID {id} not found or cannot be cancelled");
 
