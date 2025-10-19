@@ -6,6 +6,8 @@ using Mapster;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Hosting;
+using System.IO;
 
 namespace FileTransferApi.Controllers
 {
@@ -16,15 +18,18 @@ namespace FileTransferApi.Controllers
         private readonly IServerCredential _serverCredentialService;
         private readonly IConnectionTestingService _connectionService;
         private readonly ILogger<credentialsController> _logger;
+        private readonly IWebHostEnvironment _env;
 
         public credentialsController(
             IServerCredential serverCredentialService,
             IConnectionTestingService connectionService,
-            ILogger<credentialsController> logger)
+            ILogger<credentialsController> logger,
+            IWebHostEnvironment env)
         {
             _serverCredentialService = serverCredentialService;
             _connectionService = connectionService;
             _logger = logger;
+            _env = env;
         }
 
         [Authorize]
@@ -156,6 +161,44 @@ namespace FileTransferApi.Controllers
             {
                 _logger.LogError(ex, $"Error testing connection for credential {id}");
                 return StatusCode(StatusCodes.Status500InternalServerError, $"Error testing connection for credential {id}");
+            }
+        }
+
+        [Authorize]
+        [HttpPost("{id}/uploadKey")]
+        public async Task<ActionResult<ServerCredential>> UploadPrivateKey(int id, IFormFile file)
+        {
+            try
+            {
+                if (file == null || file.Length == 0)
+                    return BadRequest("No file uploaded");
+
+                var credential = await _serverCredentialService.GetCredentialByIdAsync(id);
+                if (credential == null)
+                    return NotFound($"Credential with ID {id} not found");
+
+                var keysFolder = Path.Combine(_env.ContentRootPath, "PrivateKeys");
+                if (!Directory.Exists(keysFolder))
+                    Directory.CreateDirectory(keysFolder);
+
+                var ext = Path.GetExtension(file.FileName);
+                var fileName = $"key_{id}_{Guid.NewGuid()}{ext}";
+                var filePath = Path.Combine(keysFolder, fileName);
+
+                using (var stream = System.IO.File.Create(filePath))
+                {
+                    await file.CopyToAsync(stream);
+                }
+
+                credential.PrivateKeyPath = filePath;
+                var updated = await _serverCredentialService.UpdateCredentialAsync(credential);
+
+                return Ok(updated);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error uploading private key for credential {id}");
+                return StatusCode(StatusCodes.Status500InternalServerError, $"Error uploading private key for credential {id}");
             }
         }
     }
