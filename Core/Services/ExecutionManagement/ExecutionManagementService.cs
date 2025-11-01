@@ -49,7 +49,10 @@ namespace Core.Services.ExecutionManagement
             {
                 FileTransferTaskId = task.Id,
                 StartTime = DateTime.Now,
-                Status = "In Progress"
+                Status = "In Progress",
+                FilesTransferred = 0,
+                FilesSkipped = 0,
+                ErrorCount = 0
             };
 
             execution = await _executionRepository.AddAsync(execution);
@@ -62,6 +65,18 @@ namespace Core.Services.ExecutionManagement
                 if (sourceCredential == null || destinationCredential == null)
                     throw new ArgumentException("Source or destination credential not found");
 
+                var allExecutions = await GetTaskExecutionsAsync(task.Id);
+                var previousTransfers = new HashSet<string>();
+
+                foreach (var prevExecution in allExecutions)
+                {
+                    var executionFiles = await GetExecutionFilesAsync(prevExecution.Id);
+                    foreach (var file in executionFiles.Where(f => f.TransferSuccessful))
+                    {
+                        previousTransfers.Add($"{file.SourcePath}");
+                    }
+                }
+
                 var sourceFiles = await _fileOperationsService.GetFilesFromServerAsync(
                     sourceCredential,
                     task.SourceFolder,
@@ -69,37 +84,54 @@ namespace Core.Services.ExecutionManagement
                     task.CopySubfolders);
 
                 HashSet<string> processedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                int filesTransferred = 0;
-                int errorCount = 0;
 
                 foreach (var sourceFile in sourceFiles)
                 {
-                    var result = await _fileOperationsService.TransferFileAsync(
-                        execution.Id,
-                        sourceCredential,
-                        destinationCredential,
-                        sourceFile,
-                        task.SourceFolder,
-                        task.DestinationFolder,
-                        task.CreateSubfolders,
-                        task.DeleteSourceFolderAfterTransfer);
-
-                    if (result.TransferSuccessful)
+                    try
                     {
-                        filesTransferred++;
+                        
+                        var fileKey = $"{sourceFile}";
 
-                        if (task.DeleteSourceFolderAfterTransfer)
+
+                        if (previousTransfers.Contains(fileKey))
                         {
-                            string parentFolder = Path.GetDirectoryName(sourceFile)?.Replace('\\', '/') ?? string.Empty;
-                            if (!string.IsNullOrEmpty(parentFolder))
+                            execution.FilesSkipped++;
+                            _logger.LogInformation($"Skipping already transferred file: {sourceFile}");
+                            continue;
+                        }
+
+                        var result = await _fileOperationsService.TransferFileAsync(
+                            execution.Id,
+                            sourceCredential,
+                            destinationCredential,
+                            sourceFile,
+                            task.SourceFolder,
+                            task.DestinationFolder,
+                            task.CreateSubfolders,
+                            task.DeleteSourceFolderAfterTransfer);
+
+                        if (result.TransferSuccessful)
+                        {
+                            execution.FilesTransferred++;
+
+                            if (task.DeleteSourceFolderAfterTransfer)
                             {
-                                processedFolders.Add(parentFolder);
+                                string parentFolder = Path.GetDirectoryName(sourceFile)?.Replace('\\', '/') ?? string.Empty;
+                                if (!string.IsNullOrEmpty(parentFolder))
+                                {
+                                    processedFolders.Add(parentFolder);
+                                }
                             }
                         }
+                        else
+                        {
+                            execution.ErrorCount++;
+                        }
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        errorCount++;
+                        _logger.LogError(ex, $"Error processing file {sourceFile}: {ex.Message}");
+                        execution.ErrorCount++;
                     }
                 }
 
@@ -107,7 +139,6 @@ namespace Core.Services.ExecutionManagement
                 {
                     if (sourceCredential.ServerType.ToUpper() == "NETWORK")
                     {
-
                         string networkPath = "\\\\" + sourceCredential.Host + (task.SourceFolder.StartsWith("/") ? task.SourceFolder : "/" + task.SourceFolder);
                         await _fileOperationsService.DeleteNetworkFoldersRecursivelyAsync(networkPath, processedFolders);
                     }
@@ -117,8 +148,6 @@ namespace Core.Services.ExecutionManagement
                     }
                 }
 
-                execution.FilesTransferred = filesTransferred;
-                execution.ErrorCount = errorCount;
                 execution.EndTime = DateTime.Now;
                 execution.Status = "Completed";
 
