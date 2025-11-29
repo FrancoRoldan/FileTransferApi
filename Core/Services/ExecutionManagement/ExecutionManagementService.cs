@@ -1,5 +1,6 @@
 using Core.Services.ExecutionManagement;
 using Core.Services.FileOperations;
+using Core.Services.PatternProcessor;
 using Data.Interfaces;
 using Data.Models;
 using Microsoft.Extensions.Logging;
@@ -16,6 +17,7 @@ namespace Core.Services.ExecutionManagement
         private readonly IRepository<TransferExecution> _executionRepository;
         private readonly IRepository<TransferredFile> _transferredFileRepository;
         private readonly IFileOperationsService _fileOperationsService;
+        private readonly IPatternProcessorService _patternProcessor;
         private readonly ILogger<ExecutionManagementService> _logger;
 
         public ExecutionManagementService(
@@ -24,6 +26,7 @@ namespace Core.Services.ExecutionManagement
             IRepository<TransferExecution> executionRepository,
             IRepository<TransferredFile> transferredFileRepository,
             IFileOperationsService fileOperationsService,
+            IPatternProcessorService patternProcessor,
             ILogger<ExecutionManagementService> logger)
         {
             _taskRepository = taskRepository;
@@ -31,6 +34,7 @@ namespace Core.Services.ExecutionManagement
             _executionRepository = executionRepository;
             _transferredFileRepository = transferredFileRepository;
             _fileOperationsService = fileOperationsService;
+            _patternProcessor = patternProcessor;
             _logger = logger;
         }
 
@@ -77,10 +81,17 @@ namespace Core.Services.ExecutionManagement
                     }
                 }
 
+                // Procesar el patrón antes de obtener archivos
+                var processedPattern = _patternProcessor.ParseAndExpandPattern(task.FilePattern);
+
+                _logger.LogInformation(
+                    "Task {TaskId}: Pattern '{Original}' expanded to regex '{Regex}' with date filter: {HasFilter}",
+                    task.Id, task.FilePattern, processedPattern.RegexPattern, processedPattern.RequiresDateFilter);
+
                 var sourceFiles = await _fileOperationsService.GetFilesFromServerAsync(
                     sourceCredential,
                     task.SourceFolder,
-                    task.FilePattern,
+                    processedPattern,
                     task.CopySubfolders);
 
                 HashSet<string> processedFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

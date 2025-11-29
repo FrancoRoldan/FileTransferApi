@@ -1,5 +1,6 @@
 using Core.Security;
 using Core.Services.FileOperations;
+using Core.Services.PatternProcessor;
 using Core.Utils;
 using Data.Interfaces;
 using Data.Models;
@@ -19,21 +20,24 @@ namespace Core.Services.FileOperations
         private readonly IRepository<TransferredFile> _transferredFileRepository;
         private readonly IEncryptionService _encryptionService;
         private readonly ILogger<FileOperationsService> _logger;
+        private readonly IPatternProcessorService _patternProcessor;
 
         public FileOperationsService(
             IRepository<TransferredFile> transferredFileRepository,
             IEncryptionService encryptionService,
-            ILogger<FileOperationsService> logger)
+            ILogger<FileOperationsService> logger,
+            IPatternProcessorService patternProcessor)
         {
             _transferredFileRepository = transferredFileRepository;
             _encryptionService = encryptionService;
             _logger = logger;
+            _patternProcessor = patternProcessor;
         }
 
         public async Task<IEnumerable<string>> GetFilesFromServerAsync(
             ServerCredential credential,
             string folder,
-            string? filePattern,
+            ProcessedPattern processedPattern,
             bool includeSubfolders = false)
         {
             List<string> files = new List<string>();
@@ -44,7 +48,7 @@ namespace Core.Services.FileOperations
                     using (var client = CreateFtpClient(credential))
                     {
                         await Task.Run(() => client.Connect());
-                        await GetFtpFilesRecursiveAsync(client, folder, filePattern, includeSubfolders, files);
+                        await GetFtpFilesRecursiveAsync(client, folder, processedPattern, includeSubfolders, files);
                     }
                     break;
 
@@ -52,12 +56,12 @@ namespace Core.Services.FileOperations
                     using (var client = CreateSftpClient(credential))
                     {
                         await Task.Run(() => client.Connect());
-                        await GetSftpFilesRecursiveAsync(client, folder, filePattern, includeSubfolders, files);
+                        await GetSftpFilesRecursiveAsync(client, folder, processedPattern, includeSubfolders, files);
                     }
                     break;
 
                 case "NETWORK":
-                    var networkFiles = await GetNetworkFilesAsync(credential, folder, filePattern, includeSubfolders);
+                    var networkFiles = await GetNetworkFilesAsync(credential, folder, processedPattern, includeSubfolders);
                     files.AddRange(networkFiles);
                     break;
 
@@ -197,18 +201,32 @@ namespace Core.Services.FileOperations
         private async Task GetFtpFilesRecursiveAsync(
             FtpClient client,
             string folder,
-            string? filePattern,
+            ProcessedPattern processedPattern,
             bool includeSubfolders,
             List<string> files)
         {
             var listing = client.GetListing(folder);
+            var regex = new Regex(processedPattern.RegexPattern, RegexOptions.IgnoreCase);
 
             foreach (var item in listing.Where(i => i.Type == FluentFTP.FtpObjectType.File))
             {
-                if (string.IsNullOrEmpty(filePattern) || Regex.IsMatch(item.Name, filePattern))
+                // Filtro 1: Por nombre usando regex
+                if (!regex.IsMatch(item.Name))
+                    continue;
+
+                // Filtro 2: Por fecha de modificación (si aplica)
+                if (processedPattern.RequiresDateFilter)
                 {
-                    files.Add(Path.Combine(folder, item.Name).Replace('\\', '/'));
+                    DateTime fileModified = item.Modified;
+                    if (!_patternProcessor.MatchesDateFilter(fileModified, processedPattern.DaysBack!.Value))
+                    {
+                        _logger.LogDebug("File '{File}' excluded by date filter (modified: {Date})",
+                            item.Name, fileModified);
+                        continue;
+                    }
                 }
+
+                files.Add(Path.Combine(folder, item.Name).Replace('\\', '/'));
             }
 
             if (includeSubfolders)
@@ -216,7 +234,7 @@ namespace Core.Services.FileOperations
                 foreach (var item in listing.Where(i => i.Type == FluentFTP.FtpObjectType.Directory))
                 {
                     string subFolder = Path.Combine(folder, item.Name).Replace('\\', '/');
-                    await GetFtpFilesRecursiveAsync(client, subFolder, filePattern, true, files);
+                    await GetFtpFilesRecursiveAsync(client, subFolder, processedPattern, true, files);
                 }
             }
         }
@@ -224,18 +242,32 @@ namespace Core.Services.FileOperations
         private async Task GetSftpFilesRecursiveAsync(
             SftpClient client,
             string folder,
-            string? filePattern,
+            ProcessedPattern processedPattern,
             bool includeSubfolders,
             List<string> files)
         {
             var listing = client.ListDirectory(folder);
+            var regex = new Regex(processedPattern.RegexPattern, RegexOptions.IgnoreCase);
 
             foreach (var item in listing.Where(i => i.IsRegularFile))
             {
-                if (string.IsNullOrEmpty(filePattern) || Regex.IsMatch(item.Name, filePattern))
+                // Filtro 1: Por nombre
+                if (!regex.IsMatch(item.Name))
+                    continue;
+
+                // Filtro 2: Por fecha (si aplica)
+                if (processedPattern.RequiresDateFilter)
                 {
-                    files.Add(Path.Combine(folder, item.Name).Replace('\\', '/'));
+                    DateTime fileModified = item.LastWriteTime;
+                    if (!_patternProcessor.MatchesDateFilter(fileModified, processedPattern.DaysBack!.Value))
+                    {
+                        _logger.LogDebug("File '{File}' excluded by date filter (modified: {Date})",
+                            item.Name, fileModified);
+                        continue;
+                    }
                 }
+
+                files.Add(Path.Combine(folder, item.Name).Replace('\\', '/'));
             }
 
             if (includeSubfolders)
@@ -243,7 +275,7 @@ namespace Core.Services.FileOperations
                 foreach (var item in listing.Where(i => i.IsDirectory && !i.Name.Equals(".") && !i.Name.Equals("..")))
                 {
                     string subFolder = Path.Combine(folder, item.Name).Replace('\\', '/');
-                    await GetSftpFilesRecursiveAsync(client, subFolder, filePattern, true, files);
+                    await GetSftpFilesRecursiveAsync(client, subFolder, processedPattern, true, files);
                 }
             }
         }
@@ -521,7 +553,7 @@ namespace Core.Services.FileOperations
         private async Task<IEnumerable<string>> GetNetworkFilesAsync(
             ServerCredential credential,
             string folder,
-            string? filePattern,
+            ProcessedPattern processedPattern,
             bool includeSubfolders = false)
         {
             List<string> files = new List<string>();
@@ -535,12 +567,12 @@ namespace Core.Services.FileOperations
                     using (var networkConnection = new NetworkConnection(networkPath, credential.Username,
                         _encryptionService.Decrypt(credential.EncryptedPassword)))
                     {
-                        files = await ScanNetworkFolderAsync(networkPath, filePattern, includeSubfolders);
+                        files = await ScanNetworkFolderAsync(networkPath, processedPattern, includeSubfolders);
                     }
                 }
                 else
                 {
-                    files = await ScanNetworkFolderAsync(networkPath, filePattern, includeSubfolders);
+                    files = await ScanNetworkFolderAsync(networkPath, processedPattern, includeSubfolders);
                 }
             }
             catch (Exception ex)
@@ -554,27 +586,44 @@ namespace Core.Services.FileOperations
 
         private async Task<List<string>> ScanNetworkFolderAsync(
             string networkPath,
-            string? filePattern,
+            ProcessedPattern processedPattern,
             bool includeSubfolders)
         {
             List<string> files = new List<string>();
+            var regex = new Regex(processedPattern.RegexPattern, RegexOptions.IgnoreCase);
 
             try
             {
                 foreach (var file in Directory.GetFiles(networkPath))
                 {
                     string fileName = Path.GetFileName(file);
-                    if (string.IsNullOrEmpty(filePattern) || Regex.IsMatch(fileName, filePattern))
+
+                    // Filtro 1: Por nombre
+                    if (!regex.IsMatch(fileName))
+                        continue;
+
+                    // Filtro 2: Por fecha (si aplica)
+                    if (processedPattern.RequiresDateFilter)
                     {
-                        files.Add(file.Replace('\\', '/'));
+                        var fileInfo = new FileInfo(file);
+                        DateTime fileModified = fileInfo.LastWriteTime;
+
+                        if (!_patternProcessor.MatchesDateFilter(fileModified, processedPattern.DaysBack!.Value))
+                        {
+                            _logger.LogDebug("File '{File}' excluded by date filter (modified: {Date})",
+                                fileName, fileModified);
+                            continue;
+                        }
                     }
+
+                    files.Add(file.Replace('\\', '/'));
                 }
 
                 if (includeSubfolders)
                 {
                     foreach (var subDir in Directory.GetDirectories(networkPath))
                     {
-                        var subDirFiles = await ScanNetworkFolderAsync(subDir, filePattern, true);
+                        var subDirFiles = await ScanNetworkFolderAsync(subDir, processedPattern, true);
                         files.AddRange(subDirFiles);
                     }
                 }

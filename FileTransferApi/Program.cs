@@ -7,6 +7,7 @@ using Core.Services.Credential;
 using Core.Services.ExecutionManagement;
 using Core.Services.FileOperations;
 using Core.Services.Login;
+using Core.Services.PatternProcessor;
 using Core.Services.TasksManagement;
 using Core.Utils;
 using Data.Context;
@@ -66,6 +67,7 @@ builder.Services.AddScoped<IExecutionManagementService, ExecutionManagementServi
 builder.Services.AddScoped<IConnectionTestingService, ConnectionTestingService>();
 builder.Services.AddScoped<IFileOperationsService, FileOperationsService>();
 builder.Services.AddScoped<IServerCredential, ServerCrediential>();
+builder.Services.AddScoped<IPatternProcessorService, PatternProcessorService>();
 
 
 // Register background scheduler
